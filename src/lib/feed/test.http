@@ -1,0 +1,2 @@
+
+GET http://localhost:3000/api/feed?sort=published&channelIds=77e42e18-b7a9-4c58-98f8-83dadc1f5de7&limit=5
