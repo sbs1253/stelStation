@@ -15,8 +15,7 @@ export const FeedQuerySchema = z.object({
 export function parseFeedQueryFromURL(url: URL) {
   // 다중 파라미터 (?channelIds=a&channelIds=b) 수집
   const channelIds = url.searchParams.getAll('channelIds');
-
-  return FeedQuerySchema.parse({
+  const obj = {
     channelIds: channelIds.length ? channelIds : undefined,
     groupId: url.searchParams.get('groupId') || undefined,
     sort: (url.searchParams.get('sort') as any) || undefined,
@@ -25,5 +24,6 @@ export function parseFeedQueryFromURL(url: URL) {
     range: (url.searchParams.get('range') as any) || undefined,
     limit: url.searchParams.get('limit') || undefined,
     cursor: url.searchParams.get('cursor') || undefined,
-  });
+  };
+  return FeedQuerySchema.parse(obj);
 }
