@@ -1,10 +1,10 @@
-// Node 런타임(Edge에선 Buffer 등 제약이 있어요)
+// Node 런타임
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { parseFeedQueryFromURL } from '@/lib/validations/feed';
-import { RECENT_WINDOW_DAYS } from '@/lib/feed/constants';
-import { encodeCursor, decodeCursor } from '@/lib/feed/cursor';
+import { RECENT_WINDOW_DAYS } from '@/lib/config/constants';
+import { encodeCursor, decodeCursor } from '@/lib/paging/cursor';
 import { mapPublishedRowToItem, mapRankingRowToItem } from '@/lib/feed/transform';
 import { createSupabaseServer } from '@/lib/supabase/server';
 
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     return NextResponse.json({ error: 'Invalid query', details: error?.issues ?? String(error) }, { status: 400 });
   }
-
+  console.log(query);
   // 2) 채널 집합(게스트 기준: channelIds 필요)
   const channelIds = query.channelIds ?? [];
   if (!channelIds.length) {
