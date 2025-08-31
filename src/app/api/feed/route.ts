@@ -27,12 +27,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ items: [], hasMore: false, cursor: null });
   }
 
-  // 3) 최근 120일 경계 계산 (ISO)
-  const now = new Date();
-  const windowStart = new Date(now);
-  windowStart.setDate(now.getDate() - RECENT_WINDOW_DAYS);
-  const windowStartISO = windowStart.toISOString();
-
   // 4) Supabase 클라이언트
   const supabase = await createSupabaseServer();
 
@@ -45,7 +39,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabase.rpc('rpc_feed_published_page', {
       p_channel_ids: channelIds,
-      p_window_start: windowStartISO,
+      p_window_start: null,
       p_pivot: initialState.pivot, // 없으면 null
       p_limit: query.limit, // zod가 기본값 보장
       p_filter_type: query.filterType, // 'all' | 'video' | 'short' | 'live' | 'vod'
@@ -73,7 +67,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase.rpc(rpcName, {
     p_channel_ids: channelIds,
-    p_window_start: windowStartISO,
+    p_window_start: null,
     p_limit: query.limit,
     p_filter_type: query.filterType,
   });
