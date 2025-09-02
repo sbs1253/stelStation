@@ -75,6 +75,7 @@ export async function listPlaylistItems(playlistId: string, pageToken?: string |
 /** Video IDs → 상세 메타(최대 50개/호출) */
 export async function batchGetVideos(videoIds: string[]): Promise<YTVideoMeta[]> {
   if (!YT_KEY || videoIds.length === 0) return [];
+
   type Resp = {
     items?: Array<{
       id: string;
@@ -88,41 +89,53 @@ export async function batchGetVideos(videoIds: string[]): Promise<YTVideoMeta[]>
       liveStreamingDetails?: { actualStartTime?: string; actualEndTime?: string };
     }>;
   };
-  const url =
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics,liveStreamingDetails` +
-    `&id=${encodeURIComponent(videoIds.join(','))}`;
-  const data = await ytFetch<Resp>(url);
 
-  return (data.items || []).map((v) => {
-    const dur = parseISODurationToSeconds(v.contentDetails?.duration || null);
-    const publishedAt = v.snippet?.publishedAt || new Date().toISOString();
-    const thumb =
-      v.snippet?.thumbnails?.high?.url ||
-      v.snippet?.thumbnails?.medium?.url ||
-      v.snippet?.thumbnails?.default?.url ||
-      null;
+  const chunks: string[][] = [];
+  for (let i = 0; i < videoIds.length; i += 50) {
+    chunks.push(videoIds.slice(i, i + 50));
+  }
 
-    // contentType 간단 휴리스틱: 라이브중이면 live, 라이브 Ended면 vod, 나머지는 길이로 video/short 구분
-    const isLiveNow = !!(v.liveStreamingDetails?.actualStartTime && !v.liveStreamingDetails?.actualEndTime);
-    const isVodFromLive = !!v.liveStreamingDetails?.actualEndTime;
-    let contentType: YTVideoMeta['contentType'] = isLiveNow
-      ? 'live'
-      : isVodFromLive
-      ? 'vod'
-      : (dur ?? 0) < 60
-      ? 'short'
-      : 'video';
+  const out: YTVideoMeta[] = [];
 
-    return {
-      id: v.id,
-      title: v.snippet?.title ?? '',
-      thumbnailUrl: thumb,
-      publishedAt,
-      durationSec: dur,
-      viewCount: v.statistics?.viewCount ? Number(v.statistics.viewCount) : null,
-      likeCount: v.statistics?.likeCount ? Number(v.statistics.likeCount) : null,
-      isLive: isLiveNow,
-      contentType,
-    } as YTVideoMeta;
-  });
+  for (const chunk of chunks) {
+    const url =
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics,liveStreamingDetails` +
+      `&id=${encodeURIComponent(chunk.join(','))}`;
+
+    const data = await ytFetch<Resp>(url);
+
+    for (const v of data.items || []) {
+      const dur = parseISODurationToSeconds(v.contentDetails?.duration || null);
+      const publishedAt = v.snippet?.publishedAt || new Date().toISOString();
+      const thumb =
+        v.snippet?.thumbnails?.high?.url ||
+        v.snippet?.thumbnails?.medium?.url ||
+        v.snippet?.thumbnails?.default?.url ||
+        null;
+
+      const isLiveNow = !!(v.liveStreamingDetails?.actualStartTime && !v.liveStreamingDetails?.actualEndTime);
+      const isVodFromLive = !!v.liveStreamingDetails?.actualEndTime;
+      const contentType: YTVideoMeta['contentType'] = isLiveNow
+        ? 'live'
+        : isVodFromLive
+        ? 'vod'
+        : (dur ?? 0) < 60
+        ? 'short'
+        : 'video';
+
+      out.push({
+        id: v.id,
+        title: v.snippet?.title ?? '',
+        thumbnailUrl: thumb,
+        publishedAt,
+        durationSec: dur,
+        viewCount: v.statistics?.viewCount ? Number(v.statistics.viewCount) : null,
+        likeCount: v.statistics?.likeCount ? Number(v.statistics.likeCount) : null,
+        isLive: isLiveNow,
+        contentType,
+      });
+    }
+  }
+
+  return out;
 }

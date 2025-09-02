@@ -17,14 +17,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'snapshot error', details: snap.error.message }, { status: 500 });
   }
 
-  const purge = await supabase.rpc('rpc_stats_purge_older_than_30d');
-  if (purge.error) {
-    return NextResponse.json({ error: 'purge error', details: purge.error.message }, { status: 500 });
-  }
-
   return NextResponse.json({
     ok: true,
     snapshot: snap.data,
-    purge: purge.data,
   });
 }
