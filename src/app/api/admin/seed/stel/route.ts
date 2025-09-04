@@ -6,6 +6,10 @@ const ADMIN_SECRET = process.env.CRON_SECRET ?? '';
 const CONCURRENCY = 3;
 const PAUSE_MS = 300;
 
+type ChannelMeta = { platform: 'youtube' | 'chzzk'; platformChannelId: string; name: string };
+const byUuid: Record<string, ChannelMeta> = {};
+const failures: Array<ChannelMeta & { id: string; status?: number; error?: string; details?: any }> = [];
+
 export async function POST(req: Request) {
   if ((req.headers.get('x-cron-secret') ?? '') !== ADMIN_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

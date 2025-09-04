@@ -1,4 +1,3 @@
-// app/api/sync/channel/route.ts
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
@@ -6,7 +5,12 @@ import { supabaseService } from '@/lib/supabase/service'; // 서비스 롤 객�
 import { parseSyncBody } from '@/lib/validations/sync';
 import { SYNC_COOLDOWN_MIN } from '@/lib/config/constants';
 import { getUploadsPlaylistId, listPlaylistItems, batchGetVideos } from '@/lib/youtube/client';
-import { getChannelLiveStatus } from '@/lib/chzzk/client';
+import {
+  getChzzkChannelMeta,
+  getChzzkLiveStatus,
+  getChzzkVideosPage,
+  mapChzzkVideoToCacheRow,
+} from '@/lib/chzzk/client';
 
 /** 내부 보호: 헤더 시크릿 확인 */
 function requireCronSecret(req: Request) {
@@ -15,13 +19,11 @@ function requireCronSecret(req: Request) {
   return got && expected && got === expected;
 }
 
-/** YouTube 동기화: 항상 { payload: [...] } 형태를 반환하도록 일관화 */
+/** KST now */
 function kstNow(): Date {
-  // toLocaleString으로 타임존 기준의 "현지 시각" 문자열을 만든 뒤 Date로 재생성
-  // (UTC↔KST 타임존 차이를 안전하게 적용)
-  const kst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
-  return kst;
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
 }
+
 /** KST 기준 120일 컷오프 */
 function kstCutoff120d(): Date {
   const d = kstNow();
@@ -46,20 +48,19 @@ async function doYoutubeSync(
     is_live: boolean;
   }>;
 }> {
-  const uploads = await getUploadsPlaylistId(platformChannelId);
-  if (!uploads) return { payload: [] };
+  const uploadsPlaylistId = await getUploadsPlaylistId(platformChannelId);
+  if (!uploadsPlaylistId) return { payload: [] };
 
-  const cutoff = kstCutoff120d();
+  const cutoffDateKST = kstCutoff120d();
 
   // recent: 1페이지만 (최신 업로드 유무 확인용, 쿼터 최소)
-  // full  : 컷오프에 닿을 때까지 페이지네이션(안전상한 pages도 존재)
+  // full  : 컷오프에 닿을 때까지 페이지네이션(안전 상한 pages도 존재)
   const PAGES_RECENT = 1;
   const PAGES_FULL_MAX = 5; // 안전 상한 (대부분 컷오프 만나기 전에 종료됨)
-
   const maxPages = mode === 'recent' ? PAGES_RECENT : PAGES_FULL_MAX;
 
-  let next: string | null | undefined = null;
-  const out: Array<{
+  let nextPageToken: string | null | undefined = null;
+  const collected: Array<{
     platform_video_id: string;
     title: string;
     thumbnail_url: string | null;
@@ -72,21 +73,18 @@ async function doYoutubeSync(
   }> = [];
 
   for (let page = 0; page < maxPages; page++) {
-    const { ids, nextPageToken } = await listPlaylistItems(uploads, next);
+    const { ids, nextPageToken: np } = await listPlaylistItems(uploadsPlaylistId, nextPageToken);
     if (!ids?.length) break;
 
     // 이 페이지의 상세 메타
     const metas = await batchGetVideos(ids);
 
     // 컷오프 이상만 적재
-    const filtered = metas.filter((m) => {
-      const t = new Date(m.publishedAt);
-      return t >= cutoff;
-    });
+    const filtered = metas.filter((m) => new Date(m.publishedAt) >= cutoffDateKST);
 
-    // 매핑(기존 upsert 스키마와 동일)
+    // 매핑(업서트 스키마와 동일)
     for (const m of filtered) {
-      out.push({
+      collected.push({
         platform_video_id: m.id,
         title: m.title,
         thumbnail_url: m.thumbnailUrl ?? null,
@@ -103,11 +101,11 @@ async function doYoutubeSync(
     if (mode === 'full' && filtered.length === 0) break;
 
     // 다음 페이지 준비
-    if (!nextPageToken) break;
-    next = nextPageToken;
+    if (!np) break;
+    nextPageToken = np;
   }
 
-  return { payload: out };
+  return { payload: collected };
 }
 
 export async function POST(request: Request) {
@@ -125,16 +123,18 @@ export async function POST(request: Request) {
   }
 
   // 2) 채널 조회 (DB의 내부 uuid로 찾음)
-  const { data: ch, error: chErr } = await supabaseService
+  const { data: channelRecord, error: channelSelectError } = await supabaseService
     .from('channels')
-    .select('id, platform, platform_channel_id, sync_cooldown_until, last_synced_at')
+    .select(
+      'id, platform, platform_channel_id, sync_cooldown_until, last_synced_at, current_live_video_id, last_live_ended_at, title, thumbnail_url'
+    )
     .eq('id', body.channelId)
     .single();
 
-  if (chErr) {
-    return NextResponse.json({ error: 'DB error', details: chErr.message }, { status: 500 });
+  if (channelSelectError) {
+    return NextResponse.json({ error: 'DB error', details: channelSelectError.message }, { status: 500 });
   }
-  if (!ch) {
+  if (!channelRecord) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
 
@@ -142,8 +142,8 @@ export async function POST(request: Request) {
   const nowISO = now.toISOString();
 
   // 3) 쿨타임 체크 (recent 전용 / force면 무시)
-  if (!body.force && body.mode === 'recent' && ch.sync_cooldown_until) {
-    const until = new Date(ch.sync_cooldown_until);
+  if (!body.force && body.mode === 'recent' && channelRecord.sync_cooldown_until) {
+    const until = new Date(channelRecord.sync_cooldown_until);
     if (until > now) {
       return NextResponse.json({ error: 'Cooldown', cooldownUntil: until.toISOString() }, { status: 429 });
     }
@@ -153,40 +153,149 @@ export async function POST(request: Request) {
   const stats = { inserted: 0, updated: 0 };
 
   try {
-    if (ch.platform === 'youtube') {
+    if (channelRecord.platform === 'youtube') {
       // 메타 수집
-      const y = await doYoutubeSync(ch.platform_channel_id, body.mode);
+      const yt = await doYoutubeSync(channelRecord.platform_channel_id, body.mode);
 
-      const kstNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
-      const cutoffKST = new Date(kstNow.getTime() - 120 * 24 * 3600 * 1000);
-
-      const rows = (y.payload ?? [])
+      // (이중안전) 컷오프 필터
+      const cutoffKST = kstCutoff120d();
+      const rows = (yt.payload ?? [])
         .filter((r) => new Date(r.published_at) >= cutoffKST)
-        .map((r) => ({ ...r, channel_id: ch.id }));
+        .map((r) => ({ ...r, channel_id: channelRecord.id }));
 
       if (rows.length) {
-        const up = await supabaseService
+        const upsertRes = await supabaseService
           .from('videos_cache')
           .upsert(rows, { onConflict: 'platform_video_id' })
           .select('id');
 
-        if (up.error) throw up.error;
-        stats.updated = up.data?.length ?? 0;
+        if (upsertRes.error) throw upsertRes.error;
+        stats.updated = upsertRes.data?.length ?? 0;
       }
-    } else if (ch.platform === 'chzzk') {
-      // 라이브 상태 보강(치지직은 무료 폴링 기준)
-      const live = await getChannelLiveStatus(ch.platform_channel_id);
-      const upd = await supabaseService
-        .from('channels')
-        .update({
-          current_live_video_id: live.currentLiveVideoId,
-          last_live_ended_at: live.lastLiveEndedAt,
-        })
-        .eq('id', ch.id);
+    } else if (channelRecord.platform === 'chzzk') {
+      // ---------- CHZZK 분기: 라이브 상태 + 메타 + VOD 동기화  ----------
 
-      if (upd.error) throw upd.error;
+      // 1) 라이브 상태(실시간)
+      const live = await getChzzkLiveStatus(channelRecord.platform_channel_id);
+      const wasLive = !!channelRecord.current_live_video_id;
+      const isLiveNow = !!live?.openLive;
+
+      // 2) 채널 메타(이름/썸네일)
+      let newTitle: string | null | undefined = undefined;
+      let newThumb: string | null | undefined = undefined;
+
+      try {
+        const meta = await getChzzkChannelMeta(channelRecord.platform_channel_id);
+        if (meta) {
+          if (meta.channelName && meta.channelName !== channelRecord.title) newTitle = meta.channelName;
+          if (meta.channelImageUrl && meta.channelImageUrl !== channelRecord.thumbnail_url)
+            newThumb = meta.channelImageUrl;
+        }
+      } catch {
+        // 메타 갱신은 실패해도 치명적이지 않으니 무시
+      }
+
+      // 3) 상태 전이 및 메타 변경사항 수집
+      const updates: Record<string, any> = {};
+      if (isLiveNow && !wasLive) {
+        // 라이브 시작
+        // updates.current_live_video_id = `chzzk:${channelRecord.platform_channel_id}:live`;
+        updates.last_live_ended_at = null;
+      } else if (!isLiveNow && wasLive) {
+        // 라이브 종료
+        // updates.current_live_video_id = null;
+        updates.last_live_ended_at = new Date().toISOString();
+      }
+
+      if (newTitle !== undefined) updates.title = newTitle;
+      if (newThumb !== undefined) updates.thumbnail_url = newThumb;
+
+      // 4) 채널 정보 업데이트 (변경사항이 있을 경우에만)
+      if (Object.keys(updates).length > 0) {
+        const upd = await supabaseService.from('channels').update(updates).eq('id', channelRecord.id);
+        if (upd.error) throw upd.error;
+      }
+
+      // 5) VOD 수집
+      const shouldFetchVod = true;
+      if (shouldFetchVod) {
+        const pagesToFetch = body.mode === 'recent' ? 1 : 5;
+
+        // API가 limit을 무시하고 size=30을 돌려주는 케이스 대비
+        const requestLimit = 20;
+        let offset = 0;
+
+        // 중복 방지(페이지 간 겹침 대비)
+        const seenPlatformIds = new Set<string>();
+
+        // 임시 수집 버퍼
+        const collectedRows: any[] = [];
+
+        const cutoffMs = kstCutoff120d().getTime();
+        let reachedCutoff = false;
+
+        for (let page = 0; page < pagesToFetch && !reachedCutoff; page++) {
+          const { items } = await getChzzkVideosPage(channelRecord.platform_channel_id, requestLimit, offset);
+          if (!items.length) break;
+
+          for (const item of items) {
+            // 게시 시각 계산: publishDateAt(밀리초) 우선, 없으면 KST 문자열 파싱
+            const publishedMs =
+              typeof item.publishDateAt === 'number'
+                ? item.publishDateAt
+                : item.publishDate
+                ? Date.parse(item.publishDate.replace(' ', 'T') + '+09:00')
+                : Date.now();
+
+            // 120일 컷오프: 정렬이 최신→과거라는 전제에서 조기 종료
+            if (publishedMs < cutoffMs) {
+              reachedCutoff = true;
+              break;
+            }
+
+            // 이 항목의 platform_video_id 계산(맵퍼와 동일 규칙)
+            const platformVideoId = `chzzk:${item.videoId}`;
+            if (seenPlatformIds.has(platformVideoId)) {
+              continue; // 같은 배치 내 중복 방지
+            }
+            seenPlatformIds.add(platformVideoId);
+
+            collectedRows.push(mapChzzkVideoToCacheRow(channelRecord.id, item));
+          }
+
+          // offset은 실제 응답 길이에 맞춰 증가(겹침 방지)
+          offset += items.length;
+        }
+
+        // 이중 안전망: 업서트 직전에도 컷오프/중복 제거
+        if (collectedRows.length) {
+          const cutoffDate = kstCutoff120d();
+          // 1) 컷오프 필터
+          const withinCutoff = collectedRows.filter((r) => new Date(r.published_at) >= cutoffDate);
+          if (withinCutoff.length) {
+            // 2) 같은 배치 내 중복 제거(충돌키 기준)
+            const dedupMap = new Map<string, (typeof withinCutoff)[number]>();
+            for (const row of withinCutoff) {
+              dedupMap.set(row.platform_video_id, row); // 마지막 값을 남길지, 처음 값을 남길지는 정책 선택
+            }
+            const uniqueRows = Array.from(dedupMap.values());
+
+            // 배치 분할 — 아주 큰 배치에서 안정성 높이고 싶다면 사용
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < uniqueRows.length; i += BATCH_SIZE) {
+              const slice = uniqueRows.slice(i, i + BATCH_SIZE);
+              const upsertResult = await supabaseService
+                .from('videos_cache')
+                .upsert(slice, { onConflict: 'platform_video_id' })
+                .select('id');
+              if (upsertResult.error) throw upsertResult.error;
+              stats.updated += upsertResult.data?.length ?? 0;
+            }
+          }
+        }
+      }
     } else {
-      return NextResponse.json({ error: 'Unsupported platform', details: ch.platform }, { status: 400 });
+      return NextResponse.json({ error: 'Unsupported platform', details: channelRecord.platform }, { status: 400 });
     }
   } catch (e: any) {
     // 외부 API/업서트 실패 등
@@ -197,16 +306,16 @@ export async function POST(request: Request) {
   const cooldownUntil =
     body.mode === 'recent' ? new Date(now.getTime() + SYNC_COOLDOWN_MIN * 60_000).toISOString() : null;
 
-  const { error: updErr } = await supabaseService
+  const { error: channelUpdateError } = await supabaseService
     .from('channels')
     .update({
       last_synced_at: nowISO,
       ...(cooldownUntil ? { sync_cooldown_until: cooldownUntil } : {}),
     })
-    .eq('id', ch.id);
+    .eq('id', channelRecord.id);
 
-  if (updErr) {
-    return NextResponse.json({ error: 'DB error', details: updErr.message }, { status: 500 });
+  if (channelUpdateError) {
+    return NextResponse.json({ error: 'DB error', details: channelUpdateError.message }, { status: 500 });
   }
 
   // 6) 응답
