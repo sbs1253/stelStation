@@ -1,5 +1,3 @@
-export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service'; // 서비스 롤 객체
 import { parseSyncBody } from '@/lib/validations/sync';

@@ -1,5 +1,4 @@
 // app/api/admin/resolve/youtube/route.ts
-export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';

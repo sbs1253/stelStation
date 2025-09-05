@@ -1,5 +1,4 @@
 // app/api/cron/full-refresh/route.ts
-export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';

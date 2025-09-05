@@ -1,5 +1,4 @@
 // app/api/stats/snapshot/route.ts
-export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service'; // service role 클라이언트

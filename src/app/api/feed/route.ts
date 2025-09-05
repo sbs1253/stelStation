@@ -1,5 +1,4 @@
 // Node 런타임
-export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { parseFeedQueryFromURL } from '@/lib/validations/feed';
