@@ -14,7 +14,6 @@ export async function POST(request: Request) {
 
   const url = new URL(request.url);
   const staleMin = Number(url.searchParams.get('staleMin') ?? STALE_MINUTES_DEFAULT);
-  const origin = url.origin;
 
   // 1) chzzk 채널 중, live_state_updated_at 이 오래된 것만 골라오기(스케줄 최적화)
   const { data: channels, error } = await supabaseService
@@ -44,25 +43,18 @@ export async function POST(request: Request) {
     try {
       const live = await getChzzkLiveStatus(ch.platform_channel_id);
       const isLiveNow = !!live?.openLive;
-
-      // 전이 판단: we don’t rely on current_live_video_id for chzzk
-      const updates: Record<string, any> = {
-        live_state_updated_at: new Date().toISOString(),
-      };
-
-      // 종료 전이: 이전 종료시각 이후로 live가 꺼졌다면 종료 시각 갱신
-      // 시작 전이: “최근 종료 시각이 현재 상태갱신보다 과거이고, isLiveNow true면” 시작으로 간주해도 되지만
-      // 정확한 시작 시각을 별도로 두고 싶으면 last_live_started_at 컬럼을 추가 추천.
-      if (isLiveNow) {
-        // 시작으로 간주 / 진행 중 (chzzk는 current_live_video_id 채우지 않음)
-        // updates.last_live_started_at = new Date().toISOString(); // 컬럼이 있다면
-      } else {
-        // 종료로 간주
-        updates.last_live_ended_at = new Date().toISOString();
+      const { error: liveRpcErr } = await supabaseService.rpc('rpc_channels_apply_live_state', {
+        p_channel_id: ch.id,
+        p_is_live_now: isLiveNow,
+        p_now: new Date().toISOString(),
+      });
+      // RPC 에러는 failReasons 집계(객체 누적)로 기록하고 이 채널은 스킵
+      if (liveRpcErr) {
+        const key = liveRpcErr.message ?? 'rpc_channels_apply_live_state';
+        failReasons[key] = (failReasons[key] ?? 0) + 1;
+        return;
       }
-
-      const upd = await supabaseService.from('channels').update(updates).eq('id', ch.id);
-      if (upd.error) throw upd.error;
+      // 상태 전이는 RPC가 원자적으로 처리하므로 별도 channels.update 불필요
       updated++;
     } catch (e: any) {
       const key = String(e?.message ?? e);

@@ -1,11 +1,9 @@
-// app/api/cron/full-refresh/route.ts
-
 import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';
 
 const CRON_SECRET = process.env.CRON_SECRET!;
-const CONCURRENCY = 3; // 동시에 돌릴 채널 수(안전하게 1부터 시작)
-const BATCH_DELAY_MS = 400; // 배치 사이 간격(폭주 방지)
+const CONCURRENCY = 3; // 동시에 돌릴 채널 수
+const BATCH_DELAY_MS = 400; // 배치 사이 간격
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -49,7 +47,7 @@ export async function POST(request: Request) {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-cron-secret': CRON_SECRET, // 내부 보호
+          'x-cron-secret': CRON_SECRET,
         },
         body: JSON.stringify({ channelId, mode: 'full' }),
       });
@@ -96,7 +94,6 @@ export async function POST(request: Request) {
       else failed++;
     }
 
-    // 다음 배치 전 잠깐 쉬기(유튜브 QPS 완화)
     if (i + CONCURRENCY < channels.length) {
       await sleep(BATCH_DELAY_MS);
     }
@@ -104,11 +101,11 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
-    processed: attempted, // 과거 응답 호환성
+    processed: attempted,
     attempted,
     succeeded,
-    cooldown, // full에선 일반적으로 0(쿨타임 미적용 설계)
+    cooldown,
     failed,
-    failReasons, // 실패 사유 집계
+    failReasons,
   });
 }

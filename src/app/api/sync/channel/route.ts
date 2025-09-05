@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseService } from '@/lib/supabase/service'; // 서비스 롤 객체
+import { supabaseService } from '@/lib/supabase/service';
 import { parseSyncBody } from '@/lib/validations/sync';
 import { SYNC_COOLDOWN_MIN } from '@/lib/config/constants';
 import { getUploadsPlaylistId, listPlaylistItems, batchGetVideos } from '@/lib/youtube/client';
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
   const { data: channelRecord, error: channelSelectError } = await supabaseService
     .from('channels')
     .select(
-      'id, platform, platform_channel_id, sync_cooldown_until, last_synced_at, current_live_video_id, last_live_ended_at, title, thumbnail_url'
+      'id, platform, platform_channel_id, sync_cooldown_until, last_synced_at, last_live_ended_at, title, thumbnail_url'
     )
     .eq('id', body.channelId)
     .single();
@@ -175,44 +175,29 @@ export async function POST(request: Request) {
 
       // 1) 라이브 상태(실시간)
       const live = await getChzzkLiveStatus(channelRecord.platform_channel_id);
-      const wasLive = !!channelRecord.current_live_video_id;
       const isLiveNow = !!live?.openLive;
 
-      // 2) 채널 메타(이름/썸네일)
-      let newTitle: string | null | undefined = undefined;
-      let newThumb: string | null | undefined = undefined;
-
-      try {
-        const meta = await getChzzkChannelMeta(channelRecord.platform_channel_id);
-        if (meta) {
-          if (meta.channelName && meta.channelName !== channelRecord.title) newTitle = meta.channelName;
-          if (meta.channelImageUrl && meta.channelImageUrl !== channelRecord.thumbnail_url)
-            newThumb = meta.channelImageUrl;
+      const meta = await getChzzkChannelMeta(channelRecord.platform_channel_id).catch(() => null);
+      if (meta) {
+        const metaUpdates: Record<string, any> = {};
+        if (meta.channelName && meta.channelName !== channelRecord.title) {
+          metaUpdates.title = meta.channelName;
         }
-      } catch {
-        // 메타 갱신은 실패해도 치명적이지 않으니 무시
+        if (meta.channelImageUrl && meta.channelImageUrl !== channelRecord.thumbnail_url) {
+          metaUpdates.thumbnail_url = meta.channelImageUrl;
+        }
+        if (Object.keys(metaUpdates).length) {
+          const upd = await supabaseService.from('channels').update(metaUpdates).eq('id', channelRecord.id);
+          if (upd.error) throw upd.error;
+        }
       }
 
-      // 3) 상태 전이 및 메타 변경사항 수집
-      const updates: Record<string, any> = {};
-      if (isLiveNow && !wasLive) {
-        // 라이브 시작
-        // updates.current_live_video_id = `chzzk:${channelRecord.platform_channel_id}:live`;
-        updates.last_live_ended_at = null;
-      } else if (!isLiveNow && wasLive) {
-        // 라이브 종료
-        // updates.current_live_video_id = null;
-        updates.last_live_ended_at = new Date().toISOString();
-      }
-
-      if (newTitle !== undefined) updates.title = newTitle;
-      if (newThumb !== undefined) updates.thumbnail_url = newThumb;
-
-      // 4) 채널 정보 업데이트 (변경사항이 있을 경우에만)
-      if (Object.keys(updates).length > 0) {
-        const upd = await supabaseService.from('channels').update(updates).eq('id', channelRecord.id);
-        if (upd.error) throw upd.error;
-      }
+      const { error: liveRpcErr } = await supabaseService.rpc('rpc_channels_apply_live_state', {
+        p_channel_id: channelRecord.id,
+        p_is_live_now: isLiveNow,
+        p_now: new Date().toISOString(), // 서버 now(UTC) 전달
+      });
+      if (liveRpcErr) throw liveRpcErr;
 
       // 5) VOD 수집
       const shouldFetchVod = true;
