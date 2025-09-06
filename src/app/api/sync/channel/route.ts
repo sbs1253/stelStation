@@ -9,6 +9,7 @@ import {
   getChzzkVideosPage,
   mapChzzkVideoToCacheRow,
 } from '@/lib/chzzk/client';
+import { beginOp, ok, err } from '@/lib/http/batchResponse';
 
 /** 내부 보호: 헤더 시크릿 확인 */
 function requireCronSecret(req: Request) {
@@ -120,6 +121,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid body', details: e?.issues ?? String(e) }, { status: 400 });
   }
 
+  const ctx = beginOp('sync-channel', request, body.mode);
+  // 실행 메타(시작 시각) — 응답에 durationMs를 포함하기 위함
+  const opStartedAt = new Date();
+
   // 2) 채널 조회 (DB의 내부 uuid로 찾음)
   const { data: channelRecord, error: channelSelectError } = await supabaseService
     .from('channels')
@@ -130,10 +135,10 @@ export async function POST(request: Request) {
     .single();
 
   if (channelSelectError) {
-    return NextResponse.json({ error: 'DB error', details: channelSelectError.message }, { status: 500 });
+    return err(ctx, 500, 'DB', 'DB error', channelSelectError.message);
   }
   if (!channelRecord) {
-    return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
+    return err(ctx, 404, 'NOT_FOUND', 'Channel not found');
   }
 
   const now = new Date();
@@ -143,13 +148,14 @@ export async function POST(request: Request) {
   if (!body.force && body.mode === 'recent' && channelRecord.sync_cooldown_until) {
     const until = new Date(channelRecord.sync_cooldown_until);
     if (until > now) {
-      return NextResponse.json({ error: 'Cooldown', cooldownUntil: until.toISOString() }, { status: 429 });
+      return err(ctx, 429, 'COOLDOWN', 'Cooldown', { cooldownUntil: until.toISOString() });
     }
   }
 
-  // 4) 플랫폼별 동기화
-  const stats = { inserted: 0, updated: 0 };
+  // 집계 통계: 외부에서 가져온 개수(fetched) / DB upsert된 개수(upserted)
+  const stats = { fetched: 0, upserted: 0 };
 
+  // 4) 플랫폼별 동기화
   try {
     if (channelRecord.platform === 'youtube') {
       // 메타 수집
@@ -161,6 +167,9 @@ export async function POST(request: Request) {
         .filter((r) => new Date(r.published_at) >= cutoffKST)
         .map((r) => ({ ...r, channel_id: channelRecord.id }));
 
+      // 본 실행에서 처리 대상으로 모은(컷오프 반영된) 개수
+      stats.fetched = rows.length;
+
       if (rows.length) {
         const upsertRes = await supabaseService
           .from('videos_cache')
@@ -168,7 +177,7 @@ export async function POST(request: Request) {
           .select('id');
 
         if (upsertRes.error) throw upsertRes.error;
-        stats.updated = upsertRes.data?.length ?? 0;
+        stats.upserted = upsertRes.data?.length ?? 0;
       }
     } else if (channelRecord.platform === 'chzzk') {
       // ---------- CHZZK 분기: 라이브 상태 + 메타 + VOD 동기화  ----------
@@ -262,6 +271,8 @@ export async function POST(request: Request) {
               dedupMap.set(row.platform_video_id, row); // 마지막 값을 남길지, 처음 값을 남길지는 정책 선택
             }
             const uniqueRows = Array.from(dedupMap.values());
+            // 본 실행에서 업서트 대상으로 모은(컷오프/중복 제거) 개수
+            stats.fetched = uniqueRows.length;
 
             // 배치 분할 — 아주 큰 배치에서 안정성 높이고 싶다면 사용
             const BATCH_SIZE = 500;
@@ -272,17 +283,17 @@ export async function POST(request: Request) {
                 .upsert(slice, { onConflict: 'platform_video_id' })
                 .select('id');
               if (upsertResult.error) throw upsertResult.error;
-              stats.updated += upsertResult.data?.length ?? 0;
+              stats.upserted += upsertResult.data?.length ?? 0;
             }
           }
         }
       }
     } else {
-      return NextResponse.json({ error: 'Unsupported platform', details: channelRecord.platform }, { status: 400 });
+      return err(ctx, 400, 'UNSUPPORTED_PLATFORM', 'Unsupported platform', channelRecord.platform);
     }
   } catch (e: any) {
     // 외부 API/업서트 실패 등
-    return NextResponse.json({ error: 'Sync failed', details: String(e?.message ?? e) }, { status: 502 });
+    return err(ctx, 502, 'SYNC_FAILED', 'Sync failed', String(e?.message ?? e));
   }
 
   // 5) 채널 상태 갱신 (recent만 쿨타임 부여)
@@ -298,13 +309,21 @@ export async function POST(request: Request) {
     .eq('id', channelRecord.id);
 
   if (channelUpdateError) {
-    return NextResponse.json({ error: 'DB error', details: channelUpdateError.message }, { status: 500 });
+    return err(ctx, 500, 'DB', 'DB error', channelUpdateError.message);
   }
 
+  const finishedAt = new Date();
+  const durationMs = finishedAt.getTime() - opStartedAt.getTime();
+
   // 6) 응답
-  return NextResponse.json({
+  return ok(ctx, {
     queued: true,
     mode: body.mode,
+    channelId: channelRecord.id,
+    platform: channelRecord.platform,
+    startedAt: opStartedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    durationMs,
     cooldownUntil,
     stats,
   });
