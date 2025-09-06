@@ -2,7 +2,6 @@
 
 import { NextResponse } from 'next/server';
 import { parseFeedQueryFromURL } from '@/lib/validations/feed';
-import { RECENT_WINDOW_DAYS } from '@/lib/config/constants';
 import { encodeCursor, decodeCursor } from '@/lib/paging/cursor';
 import { mapPublishedRowToItem, mapRankingRowToItem } from '@/lib/feed/transform';
 import { createSupabaseServer } from '@/lib/supabase/server';
@@ -11,6 +10,7 @@ type PublishedCursorState = { mode: 'cache'; pivot: string | null };
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const isDebug = url.searchParams.get('debug') === '1';
 
   // 1) 입력 검증 (zod)
   let query;
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   } catch (error: any) {
     return NextResponse.json({ error: 'Invalid query', details: error?.issues ?? String(error) }, { status: 400 });
   }
-  console.log(query);
+  if (isDebug) console.log('[feed] query', query);
   // 2) 채널 집합(게스트 기준: channelIds 필요)
   const channelIds = query.channelIds ?? [];
   if (!channelIds.length) {

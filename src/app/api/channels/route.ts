@@ -10,6 +10,7 @@ type ChannelListCursor = { recent_published_at: string | null; channel_id: strin
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const isDebug = url.searchParams.get('debug') === '1';
 
   // 1) 입력 검증 (zod in services/channels)
   let query;
@@ -18,20 +19,20 @@ export async function GET(request: Request) {
   } catch (error: any) {
     return NextResponse.json({ error: 'Invalid query', details: error?.issues ?? String(error) }, { status: 400 });
   }
-  console.log('/channel', query);
+  if (isDebug) console.log('[channels] query', query);
   // 2) Supabase (server)
   const supabase = await createSupabaseServer();
 
   // 3) 커서 해석
   const pivot = query.cursor ? decodeCursor<ChannelListCursor>(query.cursor) ?? null : null;
-  console.log(pivot);
+  if (pivot && isDebug) console.log('[channels] pivot', pivot);
   // 4) RPC 호출
   const { data, error } = await supabase.rpc('rpc_channels_page', {
     limit_count: query.limit,
     ...(pivot && { pivot }),
     ...(query.q && { q: query.q }),
   });
-  console.log(data);
+  if (isDebug) console.log('[channels] rpc result count', Array.isArray(data) ? data.length : data);
   if (error) {
     return NextResponse.json({ error: 'DB error', details: error.message }, { status: 500 });
   }

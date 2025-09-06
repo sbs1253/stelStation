@@ -1,23 +1,53 @@
-// app/api/stats/snapshot/route.ts
-
 import { NextResponse } from 'next/server';
-import { supabaseService } from '@/lib/supabase/service'; // service role 클라이언트
+import { supabaseService } from '@/lib/supabase/service';
 
 export async function POST(request: Request) {
-  const secret = request.headers.get('x-cron-secret');
-  if (!secret || secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // 0) 내부 인증
+  const secretGot = request.headers.get('x-cron-secret');
+  if (!process.env.CRON_SECRET || secretGot !== process.env.CRON_SECRET) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = supabaseService;
+  const startedAt = new Date();
 
-  const snap = await supabase.rpc('rpc_stats_snapshot_today');
-  if (snap.error) {
-    return NextResponse.json({ error: 'snapshot error', details: snap.error.message }, { status: 500 });
+  try {
+    // 1) 일일 스냅샷만 수행 (정리는 별도 라우트)
+    const snapshotResult = await supabaseService.rpc('rpc_stats_snapshot_today');
+    const finishedAt = new Date();
+
+    if (snapshotResult.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          startedAt: startedAt.toISOString(),
+          finishedAt: finishedAt.toISOString(),
+          durationMs: finishedAt.getTime() - startedAt.getTime(),
+          error: { stage: 'snapshot_rpc', details: snapshotResult.error.message },
+        },
+        { status: 500 }
+      );
+    }
+
+    // 성공 응답(스냅샷 결과 그대로 반환)
+    return NextResponse.json({
+      ok: true,
+      startedAt: startedAt.toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      durationMs: finishedAt.getTime() - startedAt.getTime(),
+      snapshot: snapshotResult.data ?? null,
+    });
+  } catch (e: any) {
+    // 예기치 못한 네트워크/클라이언트 오류 등
+    const finishedAt = new Date();
+    return NextResponse.json(
+      {
+        ok: false,
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
+        error: { stage: 'unexpected', details: String(e?.message ?? e) },
+      },
+      { status: 502 }
+    );
   }
-
-  return NextResponse.json({
-    ok: true,
-    snapshot: snap.data,
-  });
 }

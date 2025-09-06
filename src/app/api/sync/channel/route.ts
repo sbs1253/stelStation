@@ -13,24 +13,28 @@ import { beginOp, ok, err } from '@/lib/http/batchResponse';
 
 /** 내부 보호: 헤더 시크릿 확인 */
 function requireCronSecret(req: Request) {
-  const got = req.headers.get('x-cron-secret') ?? '';
+  const provided = req.headers.get('x-cron-secret') ?? '';
   const expected = process.env.CRON_SECRET ?? '';
-  return got && expected && got === expected;
+  return provided && expected && provided === expected;
 }
 
-/** KST now */
+/** 현재 시각(KST) */
 function kstNow(): Date {
   return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
 }
 
-/** KST 기준 120일 컷오프 */
+/** KST 기준 120일 컷오프 시각 */
 function kstCutoff120d(): Date {
   const d = kstNow();
   d.setDate(d.getDate() - 120);
   return d;
 }
 
-/** YouTube 동기화: recent=최신만(저렴), full=KST 120일 창 보장(깊게) */
+/**
+ * YouTube 동기화
+ * - recent: 최신 페이지(1p)만 조회해 신규 업로드 유무 체크(저렴)
+ * - full  : KST 120일 창을 만족할 때까지 페이지네이션(안전 상한 존재)
+ */
 async function doYoutubeSync(
   platformChannelId: string,
   mode: 'recent' | 'full'
@@ -52,14 +56,13 @@ async function doYoutubeSync(
 
   const cutoffDateKST = kstCutoff120d();
 
-  // recent: 1페이지만 (최신 업로드 유무 확인용, 쿼터 최소)
-  // full  : 컷오프에 닿을 때까지 페이지네이션(안전 상한 pages도 존재)
-  const PAGES_RECENT = 1;
-  const PAGES_FULL_MAX = 5; // 안전 상한 (대부분 컷오프 만나기 전에 종료됨)
-  const maxPages = mode === 'recent' ? PAGES_RECENT : PAGES_FULL_MAX;
+  // 최근/전체 모드별 페이지 상한
+  const RECENT_PAGES = 1;
+  const FULL_PAGES_MAX = 5; // 대부분 컷오프 만나기 전 종료
+  const maxPages = mode === 'recent' ? RECENT_PAGES : FULL_PAGES_MAX;
 
   let nextPageToken: string | null | undefined = null;
-  const collected: Array<{
+  const collectedRows: Array<{
     platform_video_id: string;
     title: string;
     thumbnail_url: string | null;
@@ -71,40 +74,40 @@ async function doYoutubeSync(
     is_live: boolean;
   }> = [];
 
-  for (let page = 0; page < maxPages; page++) {
-    const { ids, nextPageToken: np } = await listPlaylistItems(uploadsPlaylistId, nextPageToken);
-    if (!ids?.length) break;
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
+    const { ids: videoIds, nextPageToken: nextToken } = await listPlaylistItems(uploadsPlaylistId, nextPageToken);
+    if (!videoIds?.length) break;
 
     // 이 페이지의 상세 메타
-    const metas = await batchGetVideos(ids);
+    const videoMetas = await batchGetVideos(videoIds);
 
     // 컷오프 이상만 적재
-    const filtered = metas.filter((m) => new Date(m.publishedAt) >= cutoffDateKST);
+    const filteredMetas = videoMetas.filter((meta) => new Date(meta.publishedAt) >= cutoffDateKST);
 
-    // 매핑(업서트 스키마와 동일)
-    for (const m of filtered) {
-      collected.push({
-        platform_video_id: m.id,
-        title: m.title,
-        thumbnail_url: m.thumbnailUrl ?? null,
-        published_at: m.publishedAt,
-        duration_sec: m.durationSec ?? null,
-        view_count: m.viewCount ?? null,
-        like_count: m.likeCount ?? null,
-        content_type: m.contentType,
-        is_live: !!m.isLive,
+    // 업서트 스키마로 매핑
+    for (const meta of filteredMetas) {
+      collectedRows.push({
+        platform_video_id: meta.id,
+        title: meta.title,
+        thumbnail_url: meta.thumbnailUrl ?? null,
+        published_at: meta.publishedAt,
+        duration_sec: meta.durationSec ?? null,
+        view_count: meta.viewCount ?? null,
+        like_count: meta.likeCount ?? null,
+        content_type: meta.contentType,
+        is_live: !!meta.isLive,
       });
     }
 
-    // full 모드: 이 페이지에서 컷오프 이상이 하나도 없었으면 더 내려갈 필요 없음(종료)
-    if (mode === 'full' && filtered.length === 0) break;
+    // full 모드: 이 페이지에서 컷오프 이상이 하나도 없었으면 아래로 더 내려갈 필요 없음
+    if (mode === 'full' && filteredMetas.length === 0) break;
 
     // 다음 페이지 준비
-    if (!np) break;
-    nextPageToken = np;
+    if (!nextToken) break;
+    nextPageToken = nextToken;
   }
 
-  return { payload: collected };
+  return { payload: collectedRows };
 }
 
 export async function POST(request: Request) {
@@ -121,11 +124,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid body', details: e?.issues ?? String(e) }, { status: 400 });
   }
 
-  const ctx = beginOp('sync-channel', request, body.mode);
-  // 실행 메타(시작 시각) — 응답에 durationMs를 포함하기 위함
-  const opStartedAt = new Date();
+  // 표준 응답 컨텍스트 시작
+  const context = beginOp('sync-channel', request, body.mode);
+  const operationStartedAt = new Date(); // duration 계산용
 
-  // 2) 채널 조회 (DB의 내부 uuid로 찾음)
+  // 2) 채널 조회 (DB 내부 uuid)
   const { data: channelRecord, error: channelSelectError } = await supabaseService
     .from('channels')
     .select(
@@ -135,10 +138,10 @@ export async function POST(request: Request) {
     .single();
 
   if (channelSelectError) {
-    return err(ctx, 500, 'DB', 'DB error', channelSelectError.message);
+    return err(context, 500, 'DB', 'DB error', channelSelectError.message);
   }
   if (!channelRecord) {
-    return err(ctx, 404, 'NOT_FOUND', 'Channel not found');
+    return err(context, 404, 'NOT_FOUND', 'Channel not found');
   }
 
   const now = new Date();
@@ -146,9 +149,9 @@ export async function POST(request: Request) {
 
   // 3) 쿨타임 체크 (recent 전용 / force면 무시)
   if (!body.force && body.mode === 'recent' && channelRecord.sync_cooldown_until) {
-    const until = new Date(channelRecord.sync_cooldown_until);
-    if (until > now) {
-      return err(ctx, 429, 'COOLDOWN', 'Cooldown', { cooldownUntil: until.toISOString() });
+    const cooldownUntilDate = new Date(channelRecord.sync_cooldown_until);
+    if (cooldownUntilDate > now) {
+      return err(context, 429, 'COOLDOWN', 'Cooldown', { cooldownUntil: cooldownUntilDate.toISOString() });
     }
   }
 
@@ -158,57 +161,58 @@ export async function POST(request: Request) {
   // 4) 플랫폼별 동기화
   try {
     if (channelRecord.platform === 'youtube') {
-      // 메타 수집
-      const yt = await doYoutubeSync(channelRecord.platform_channel_id, body.mode);
+      // YouTube 메타 수집
+      const youtubeSyncResult = await doYoutubeSync(channelRecord.platform_channel_id, body.mode);
 
       // (이중안전) 컷오프 필터
       const cutoffKST = kstCutoff120d();
-      const rows = (yt.payload ?? [])
-        .filter((r) => new Date(r.published_at) >= cutoffKST)
-        .map((r) => ({ ...r, channel_id: channelRecord.id }));
+      const rowsForUpsert = (youtubeSyncResult.payload ?? [])
+        .filter((row) => new Date(row.published_at) >= cutoffKST)
+        .map((row) => ({ ...row, channel_id: channelRecord.id }));
 
-      // 본 실행에서 처리 대상으로 모은(컷오프 반영된) 개수
-      stats.fetched = rows.length;
+      stats.fetched = rowsForUpsert.length;
 
-      if (rows.length) {
-        const upsertRes = await supabaseService
+      if (rowsForUpsert.length) {
+        const upsertResult = await supabaseService
           .from('videos_cache')
-          .upsert(rows, { onConflict: 'platform_video_id' })
+          .upsert(rowsForUpsert, { onConflict: 'platform_video_id' })
           .select('id');
 
-        if (upsertRes.error) throw upsertRes.error;
-        stats.upserted = upsertRes.data?.length ?? 0;
+        if (upsertResult.error) throw upsertResult.error;
+        stats.upserted = upsertResult.data?.length ?? 0;
       }
     } else if (channelRecord.platform === 'chzzk') {
-      // ---------- CHZZK 분기: 라이브 상태 + 메타 + VOD 동기화  ----------
+      // ---------- CHZZK: 라이브 상태 + 메타 + (옵션)VOD 동기화 ----------
 
       // 1) 라이브 상태(실시간)
-      const live = await getChzzkLiveStatus(channelRecord.platform_channel_id);
-      const isLiveNow = !!live?.openLive;
+      const liveStatus = await getChzzkLiveStatus(channelRecord.platform_channel_id);
+      const isLiveNow = !!liveStatus?.openLive;
 
-      const meta = await getChzzkChannelMeta(channelRecord.platform_channel_id).catch(() => null);
-      if (meta) {
+      // 2) 채널 메타(제목/썸네일) 갱신
+      const channelMeta = await getChzzkChannelMeta(channelRecord.platform_channel_id).catch(() => null);
+      if (channelMeta) {
         const metaUpdates: Record<string, any> = {};
-        if (meta.channelName && meta.channelName !== channelRecord.title) {
-          metaUpdates.title = meta.channelName;
+        if (channelMeta.channelName && channelMeta.channelName !== channelRecord.title) {
+          metaUpdates.title = channelMeta.channelName;
         }
-        if (meta.channelImageUrl && meta.channelImageUrl !== channelRecord.thumbnail_url) {
-          metaUpdates.thumbnail_url = meta.channelImageUrl;
+        if (channelMeta.channelImageUrl && channelMeta.channelImageUrl !== channelRecord.thumbnail_url) {
+          metaUpdates.thumbnail_url = channelMeta.channelImageUrl;
         }
         if (Object.keys(metaUpdates).length) {
-          const upd = await supabaseService.from('channels').update(metaUpdates).eq('id', channelRecord.id);
-          if (upd.error) throw upd.error;
+          const updateResult = await supabaseService.from('channels').update(metaUpdates).eq('id', channelRecord.id);
+          if (updateResult.error) throw updateResult.error;
         }
       }
 
-      const { error: liveRpcErr } = await supabaseService.rpc('rpc_channels_apply_live_state', {
+      // 3) 라이브 상태 전이 기록(RPC)
+      const { error: liveStateRpcError } = await supabaseService.rpc('rpc_channels_apply_live_state', {
         p_channel_id: channelRecord.id,
         p_is_live_now: isLiveNow,
         p_now: new Date().toISOString(), // 서버 now(UTC) 전달
       });
-      if (liveRpcErr) throw liveRpcErr;
+      if (liveStateRpcError) throw liveStateRpcError;
 
-      // 5) VOD 수집
+      // 4) (옵션) VOD 수집 — 현재는 항상 수행(true). 정책 변경 시 토글.
       const shouldFetchVod = true;
       if (shouldFetchVod) {
         const pagesToFetch = body.mode === 'recent' ? 1 : 5;
@@ -232,15 +236,15 @@ export async function POST(request: Request) {
 
           for (const item of items) {
             // 게시 시각 계산: publishDateAt(밀리초) 우선, 없으면 KST 문자열 파싱
-            const publishedMs =
+            const publishedTimestampMs =
               typeof item.publishDateAt === 'number'
                 ? item.publishDateAt
                 : item.publishDate
                 ? Date.parse(item.publishDate.replace(' ', 'T') + '+09:00')
                 : Date.now();
 
-            // 120일 컷오프: 정렬이 최신→과거라는 전제에서 조기 종료
-            if (publishedMs < cutoffMs) {
+            // 120일 컷오프(정렬: 최신→과거 전제)
+            if (publishedTimestampMs < cutoffMs) {
               reachedCutoff = true;
               break;
             }
@@ -259,28 +263,32 @@ export async function POST(request: Request) {
           offset += items.length;
         }
 
-        // 이중 안전망: 업서트 직전에도 컷오프/중복 제거
+        // 업서트 직전 컷오프/중복 제거(이중 안전망)
         if (collectedRows.length) {
           const cutoffDate = kstCutoff120d();
+
           // 1) 컷오프 필터
           const withinCutoff = collectedRows.filter((r) => new Date(r.published_at) >= cutoffDate);
+
           if (withinCutoff.length) {
-            // 2) 같은 배치 내 중복 제거(충돌키 기준)
-            const dedupMap = new Map<string, (typeof withinCutoff)[number]>();
+            // 2) 충돌키 기준 중복 제거
+            const deduplicatedMap = new Map<string, (typeof withinCutoff)[number]>();
             for (const row of withinCutoff) {
-              dedupMap.set(row.platform_video_id, row); // 마지막 값을 남길지, 처음 값을 남길지는 정책 선택
+              // 정책상 마지막 값을 남김
+              deduplicatedMap.set(row.platform_video_id, row);
             }
-            const uniqueRows = Array.from(dedupMap.values());
-            // 본 실행에서 업서트 대상으로 모은(컷오프/중복 제거) 개수
+            const uniqueRows = Array.from(deduplicatedMap.values());
+
+            // 집계(본 실행에서 업서트 대상으로 모은 개수)
             stats.fetched = uniqueRows.length;
 
-            // 배치 분할 — 아주 큰 배치에서 안정성 높이고 싶다면 사용
-            const BATCH_SIZE = 500;
-            for (let i = 0; i < uniqueRows.length; i += BATCH_SIZE) {
-              const slice = uniqueRows.slice(i, i + BATCH_SIZE);
+            // 대용량 대비 배치 업서트
+            const UPSERT_BATCH_SIZE = 500;
+            for (let i = 0; i < uniqueRows.length; i += UPSERT_BATCH_SIZE) {
+              const batchSlice = uniqueRows.slice(i, i + UPSERT_BATCH_SIZE);
               const upsertResult = await supabaseService
                 .from('videos_cache')
-                .upsert(slice, { onConflict: 'platform_video_id' })
+                .upsert(batchSlice, { onConflict: 'platform_video_id' })
                 .select('id');
               if (upsertResult.error) throw upsertResult.error;
               stats.upserted += upsertResult.data?.length ?? 0;
@@ -289,42 +297,42 @@ export async function POST(request: Request) {
         }
       }
     } else {
-      return err(ctx, 400, 'UNSUPPORTED_PLATFORM', 'Unsupported platform', channelRecord.platform);
+      return err(context, 400, 'UNSUPPORTED_PLATFORM', 'Unsupported platform', channelRecord.platform);
     }
   } catch (e: any) {
     // 외부 API/업서트 실패 등
-    return err(ctx, 502, 'SYNC_FAILED', 'Sync failed', String(e?.message ?? e));
+    return err(context, 502, 'SYNC_FAILED', 'Sync failed', String(e?.message ?? e));
   }
 
   // 5) 채널 상태 갱신 (recent만 쿨타임 부여)
-  const cooldownUntil =
+  const cooldownUntilISO =
     body.mode === 'recent' ? new Date(now.getTime() + SYNC_COOLDOWN_MIN * 60_000).toISOString() : null;
 
   const { error: channelUpdateError } = await supabaseService
     .from('channels')
     .update({
       last_synced_at: nowISO,
-      ...(cooldownUntil ? { sync_cooldown_until: cooldownUntil } : {}),
+      ...(cooldownUntilISO ? { sync_cooldown_until: cooldownUntilISO } : {}),
     })
     .eq('id', channelRecord.id);
 
   if (channelUpdateError) {
-    return err(ctx, 500, 'DB', 'DB error', channelUpdateError.message);
+    return err(context, 500, 'DB', 'DB error', channelUpdateError.message);
   }
 
-  const finishedAt = new Date();
-  const durationMs = finishedAt.getTime() - opStartedAt.getTime();
-
   // 6) 응답
-  return ok(ctx, {
+  const finishedAt = new Date();
+  const durationMs = finishedAt.getTime() - operationStartedAt.getTime();
+
+  return ok(context, {
     queued: true,
     mode: body.mode,
     channelId: channelRecord.id,
     platform: channelRecord.platform,
-    startedAt: opStartedAt.toISOString(),
+    startedAt: operationStartedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationMs,
-    cooldownUntil,
+    cooldownUntil: cooldownUntilISO,
     stats,
   });
 }

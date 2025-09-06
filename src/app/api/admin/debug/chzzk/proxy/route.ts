@@ -42,7 +42,14 @@ async function fetchApi(baseUrl: string, path: string, useAuth: boolean) {
     });
 
     const responseText = await response.text();
-    const body = responseText ? JSON.parse(responseText) : null;
+    let body: any = null;
+    if (responseText) {
+      try {
+        body = JSON.parse(responseText);
+      } catch {
+        body = responseText;
+      }
+    }
 
     if (!response.ok) {
       console.warn('API returned an error:', { status: response.status, body });
@@ -73,14 +80,32 @@ export async function GET(req: Request) {
       if (!CHZZK_CLIENT_ID || !CHZZK_CLIENT_SECRET) {
         return NextResponse.json({ error: 'Missing CHZZK credentials for Open API.' }, { status: 500 });
       }
-      const channelIds = searchParams.get('channelIds');
-      if (!channelIds) {
+      // 허용 형태:
+      // - channelIds=aaa,bbb  (콤마 구분)
+      // - channelIds=aaa & channelIds=bbb  (반복 키)
+      // - channelId=aaa  (단일 편의)
+      const idsRepeated = searchParams.getAll('channelIds').filter(Boolean);
+      let idsParam = searchParams.get('channelIds') || '';
+      const singleId = searchParams.get('channelId') || '';
+
+      // 우선순위: 반복키 > 단일키(콤마 포함) > channelId
+      let joined = '';
+      if (idsRepeated.length) {
+        joined = idsRepeated.join(',');
+      } else if (idsParam) {
+        joined = idsParam;
+      } else if (singleId) {
+        joined = singleId;
+      }
+
+      if (!joined) {
         return NextResponse.json(
-          { error: "Query parameter 'channelIds' is required for type=channel." },
+          { error: "Query parameter 'channelIds' (or 'channelId') is required for type=channel." },
           { status: 400 }
         );
       }
-      const apiPath = `/open/v1/channels?channelIds=${encodeURIComponent(channelIds)}`;
+
+      const apiPath = `/open/v1/channels?channelIds=${encodeURIComponent(joined)}`;
       return await fetchApi(OPEN_API_BASE_URL, apiPath, true);
     } else if (type === 'live-status') {
       // 'live-detail'에서 'live-status'로 명칭 변경
@@ -107,11 +132,15 @@ export async function GET(req: Request) {
       // 페이징을 위한 limit, offset 파라미터 처리 (기본값 설정)
       const limit = searchParams.get('limit') ?? '20';
       const offset = searchParams.get('offset') ?? '0';
+      // 기본 페이징: limit=20, offset=0
 
       const apiPath = `/service/v1/channels/${encodeURIComponent(channelId)}/videos?limit=${limit}&offset=${offset}`;
       return await fetchApi(GAME_API_BASE_URL, apiPath, false); // 인증 헤더 불필요
     } else {
-      return NextResponse.json({ error: "Invalid 'type' parameter. Use 'channel' or 'live-status'." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid 'type' parameter. Use 'channel' | 'live-status' | 'videos'." },
+        { status: 400 }
+      );
     }
   } catch (error: any) {
     console.error('API proxy failed:', {
