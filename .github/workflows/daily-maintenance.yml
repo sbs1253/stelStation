@@ -21,7 +21,7 @@ jobs:
       - name: Full refresh (all channels)
         run: |
           set -euo pipefail
-          curl -sSf --retry 3 --retry-all-errors --max-time 300 \
+          curl -vL -sSf --retry 3 --retry-all-errors --max-time 300 \
             -X POST "$PROD_API_BASE/api/cron/full-refresh?concurrency=3&batchDelayMs=0" \
             -H "content-type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \
