@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           # Verbose(-v) + Follow redirects(-L), show body even on HTTP errors(--fail-with-body)
-          curl -vL -sS --fail-with-body --retry 3 --retry-all-errors --max-time 300 \
+          curl -L -sS --fail-with-body --retry 3 --retry-all-errors --max-time 300 \
             -X POST "$PROD_API_BASE/api/sync/recent-batch" \
             -H "accept: application/json" \
             -H "content-type: application/json" \
@@ -30,6 +30,7 @@ jobs:
             -d '{}' | tee recent-batch.json
 
       - name: Summary
+        if: always()
         run: |
           {
             echo "## ⏱️ Hourly recent sync summary";
