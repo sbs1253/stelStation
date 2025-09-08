@@ -1,5 +1,3 @@
-export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
 import { encodeCursor, decodeCursor } from '@/lib/paging/cursor';
 import { createSupabaseServer } from '@/lib/supabase/server';

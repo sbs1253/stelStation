@@ -2,7 +2,7 @@
 export function mapPublishedRowToItem(row: any) {
   return {
     videoId: row.platform_video_id,
-    platform: 'youtube', // chzzk 도입 시 분기
+    platform: row.platform,
     channel: { id: row.channel_id, title: undefined, thumb: undefined },
     title: row.title,
     thumb: row.thumbnail_url ?? null,
@@ -13,6 +13,10 @@ export function mapPublishedRowToItem(row: any) {
     stats: {
       views: row.view_count ?? null,
       likes: row.like_count ?? null,
+    },
+    live: {
+      isLiveNow: !!row.is_live_now,
+      hadLive24h: !!row.had_live_24h,
     },
   };
 }

@@ -1,9 +1,7 @@
 // Node 런타임
-export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { parseFeedQueryFromURL } from '@/lib/validations/feed';
-import { RECENT_WINDOW_DAYS } from '@/lib/config/constants';
 import { encodeCursor, decodeCursor } from '@/lib/paging/cursor';
 import { mapPublishedRowToItem, mapRankingRowToItem } from '@/lib/feed/transform';
 import { createSupabaseServer } from '@/lib/supabase/server';
@@ -12,6 +10,7 @@ type PublishedCursorState = { mode: 'cache'; pivot: string | null };
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  const isDebug = url.searchParams.get('debug') === '1';
 
   // 1) 입력 검증 (zod)
   let query;
@@ -20,18 +19,12 @@ export async function GET(request: Request) {
   } catch (error: any) {
     return NextResponse.json({ error: 'Invalid query', details: error?.issues ?? String(error) }, { status: 400 });
   }
-  console.log(query);
+  if (isDebug) console.log('[feed] query', query);
   // 2) 채널 집합(게스트 기준: channelIds 필요)
   const channelIds = query.channelIds ?? [];
   if (!channelIds.length) {
     return NextResponse.json({ items: [], hasMore: false, cursor: null });
   }
-
-  // 3) 최근 120일 경계 계산 (ISO)
-  const now = new Date();
-  const windowStart = new Date(now);
-  windowStart.setDate(now.getDate() - RECENT_WINDOW_DAYS);
-  const windowStartISO = windowStart.toISOString();
 
   // 4) Supabase 클라이언트
   const supabase = await createSupabaseServer();
@@ -45,7 +38,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabase.rpc('rpc_feed_published_page', {
       p_channel_ids: channelIds,
-      p_window_start: windowStartISO,
+      p_window_start: null,
       p_pivot: initialState.pivot, // 없으면 null
       p_limit: query.limit, // zod가 기본값 보장
       p_filter_type: query.filterType, // 'all' | 'video' | 'short' | 'live' | 'vod'
@@ -73,7 +66,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase.rpc(rpcName, {
     p_channel_ids: channelIds,
-    p_window_start: windowStartISO,
+    p_window_start: null,
     p_limit: query.limit,
     p_filter_type: query.filterType,
   });
