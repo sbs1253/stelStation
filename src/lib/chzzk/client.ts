@@ -1,6 +1,6 @@
 // API 종류에 따른 기본 URL
 const OPEN_API_BASE_URL = process.env.CHZZK_OPEN_API_BASE_URL ?? 'https://openapi.chzzk.naver.com';
-const SERVICE_API_BASE_URL = process.env.CHZZK_GAME_API_BASE_URL ?? 'https://api.chzzk.naver.com';
+const SERVICE_API_BASE_URL = process.env.CHZZK_SERVICE_API_BASE_URL ?? 'https://api.chzzk.naver.com';
 
 // 인증 정보
 const CHZZK_CLIENT_ID = process.env.CHZZK_CLIENT_ID ?? '';
