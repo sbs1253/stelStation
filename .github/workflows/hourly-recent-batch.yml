@@ -30,12 +30,16 @@ jobs:
             -X POST "$PROD_API_BASE/api/sync/recent-batch" \
             -H "content-type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \
-            -d '{}'
+            -d '{}' | tee recent-batch.json
 
       - name: Summary
         run: |
           {
-            echo "## ⏱️ Hourly recent sync summary"
-            echo ""
-            cat recent-batch.json
+            echo "## ⏱️ Hourly recent sync summary";
+            echo "";
+            if command -v jq >/dev/null 2>&1; then
+              jq . recent-batch.json;
+            else
+              cat recent-batch.json;
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
