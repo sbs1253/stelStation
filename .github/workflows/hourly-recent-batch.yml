@@ -21,8 +21,12 @@ jobs:
       - name: Recent batch (all channels)
         run: |
           set -euo pipefail
-          # 전체 채널 recent 일괄. 필요 시 쿼리 추가 가능: ?platform=youtube 등
-          curl -sSf --retry 3 --retry-all-errors --max-time 300 \
+          # ---------------- [수정!] ----------------
+          # -sSf 뒤에 -vL 옵션을 추가합니다.
+          # -v: verbose. 모든 통신 과정을 자세히 보여줘!
+          # -L: Location. 리디렉션이 있으면, 그 주소를 따라가 줘!
+          # -------------------------------------------
+          curl -vL -sSf --retry 3 --retry-all-errors --max-time 300 \
             -X POST "$PROD_API_BASE/api/sync/recent-batch" \
             -H "content-type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \
