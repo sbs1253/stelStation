@@ -61,16 +61,25 @@ export async function POST(req: Request) {
   const queryPlatformRaw = url.searchParams.get('platform');
   const platformFilter = queryPlatformRaw === 'youtube' || queryPlatformRaw === 'chzzk' ? queryPlatformRaw : null;
 
-  // 2) 바디 검증
+  // 2) 바디 검증 (빈 바디 허용)
+  //    - POST 본문이 비어 있으면 `{}` 로 간주하여 기본 동작(전체 채널 recent)을 수행합니다.
+  //    - 잘못된 JSON일 때만 400을 반환합니다.
   let body: z.infer<typeof BodySchema>;
-  try {
-    body = BodySchema.parse(await req.json());
-  } catch (e: any) {
-    return NextResponse.json({ error: 'Invalid body', details: e?.issues ?? String(e) }, { status: 400 });
+  {
+    let parsedJson: unknown = {};
+    try {
+      const rawText = await req.text(); // 빈 본문이어도 예외가 나지 않음
+      parsedJson = rawText ? JSON.parse(rawText) : {};
+    } catch (e) {
+      return NextResponse.json({ error: 'Invalid body', details: 'Malformed JSON' }, { status: 400 });
+    }
+    const result = BodySchema.safeParse(parsedJson);
+    if (!result.success) {
+      return NextResponse.json({ error: 'Invalid body', details: result.error.flatten() }, { status: 400 });
+    }
+    body = result.data;
   }
-  if (!body.creatorId && (!body.channelIds || body.channelIds.length === 0)) {
-    return NextResponse.json({ error: 'Either creatorId or channelIds[] is required.' }, { status: 400 });
-  }
+  // 입력이 없으면 기본값으로 동작(creatorId/channelIds 미필요)
 
   // 3) 대상 채널 수집(creatorId 매핑 + 직접 전달된 channelIds 병합)
   let targetChannelIds: string[] = [];
@@ -91,24 +100,53 @@ export async function POST(req: Request) {
     targetChannelIds = Array.from(set);
   }
 
-  // Optional platform filter (youtube | chzzk)
-  if (platformFilter && targetChannelIds.length) {
-    const platformFilterQuery = await supabaseService
-      .from('channels')
-      .select('id')
-      .in('id', targetChannelIds)
-      .eq('platform', platformFilter);
-    if (platformFilterQuery.error) {
-      return NextResponse.json({ error: 'DB error', details: platformFilterQuery.error.message }, { status: 500 });
+  // 3-bis) 대상 집합 정제: 플랫폼 필터 + (옵션) 쿨타임 사전 필터
+  //   - channelIds/creatorId가 있으면 그 집합을 정제
+  //   - 아무 입력이 없으면 "전체 채널"을 기준으로 집합 구성
+  const now = new Date();
+
+  async function refineByPlatformAndCooldown(seedIds: string[] | null): Promise<string[]> {
+    if (seedIds && seedIds.length > 0) {
+      const q = await supabaseService.from('channels').select('id, platform, sync_cooldown_until').in('id', seedIds);
+      if (q.error) {
+        throw new Error(`DB error(refine seed): ${q.error.message}`);
+      }
+      let rows = q.data ?? [];
+      if (platformFilter) rows = rows.filter((r) => r.platform === platformFilter);
+      if (!body.force) {
+        rows = rows.filter((r) => !r.sync_cooldown_until || new Date(r.sync_cooldown_until) <= now);
+      }
+      return rows.map((r) => r.id);
+    } else {
+      // 전체 채널에서 선택
+      let q = supabaseService.from('channels').select('id, platform, sync_cooldown_until');
+      if (platformFilter) {
+        q = q.eq('platform', platformFilter);
+      }
+      const r = await q;
+      if (r.error) {
+        throw new Error(`DB error(select all): ${r.error.message}`);
+      }
+      let rows = r.data ?? [];
+      if (!body.force) {
+        rows = rows.filter((x) => !x.sync_cooldown_until || new Date(x.sync_cooldown_until) <= now);
+      }
+      return rows.map((x) => x.id);
     }
-    targetChannelIds = (platformFilterQuery.data ?? []).map((r) => r.id);
+  }
+
+  try {
+    targetChannelIds = await refineByPlatformAndCooldown(targetChannelIds.length ? targetChannelIds : null);
+  } catch (e: any) {
+    return NextResponse.json({ error: 'DB error', details: String(e?.message ?? e) }, { status: 500 });
   }
 
   // 모든 필터링을 마친 뒤 limit 적용
-  if (limit !== null) {
+  if (limit !== null && targetChannelIds.length > limit) {
     targetChannelIds = targetChannelIds.slice(0, limit);
   }
 
+  // 입력/쿨타임/플랫폼/리미트 적용 후에도 비어 있으면 즉시 종료
   if (!targetChannelIds.length) {
     const finishedAt = new Date();
     return NextResponse.json({
@@ -239,7 +277,6 @@ export async function POST(req: Request) {
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - startedAt.getTime(),
-    processed: attempted, // 과거 호환용 이름
     attempted,
     succeeded,
     cooldown,

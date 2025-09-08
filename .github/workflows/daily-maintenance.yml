@@ -21,7 +21,7 @@ jobs:
       - name: Full refresh (all channels)
         run: |
           set -euo pipefail
-          curl -sSf --retry 3 --retry-all-errors --max-time 300 \
+          curl -vL -sSf --retry 3 --retry-all-errors --max-time 300 \
             -X POST "$PROD_API_BASE/api/cron/full-refresh?concurrency=3&batchDelayMs=0" \
             -H "content-type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \
@@ -30,7 +30,7 @@ jobs:
       - name: Stats snapshot (daily baseline)
         run: |
           set -euo pipefail
-          curl -sSf --retry 3 --retry-all-errors --max-time 180 \
+          curl -vL -sSf --retry 3 --retry-all-errors --max-time 180 \
             -X POST "$PROD_API_BASE/api/stats/snapshot" \
             -H "content-type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \
@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           # ttlHours는 운영정책에 맞춰 조절 가능(null이면 순수 120일 컷만 적용)
-          curl -sSf --retry 3 --retry-all-errors --max-time 180 \
+          curl -vL -sSf --retry 3 --retry-all-errors --max-time 180 \
             -X POST "$PROD_API_BASE/api/cron/purge-old?ttlHours=24" \
             -H "content-type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \

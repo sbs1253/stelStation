@@ -195,7 +195,6 @@ export async function POST(request: Request) {
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
     durationMs: finishedAt.getTime() - startedAt.getTime(),
-    processed: attempted, // (레거시 호환) processed = attempted
     attempted,
     succeeded,
     cooldown,
