@@ -7,7 +7,7 @@ const CHZZK_CLIENT_SECRET = process.env.CHZZK_CLIENT_SECRET ?? '';
 
 // API 종류에 따른 기본 URL
 const OPEN_API_BASE_URL = process.env.CHZZK_OPEN_API_BASE_URL ?? 'https://openapi.chzzk.naver.com'; // 공식 Open API (캐시 가능성 있음)
-const GAME_API_BASE_URL = process.env.CHZZK_GAME_API_BASE_URL ?? 'https://api.chzzk.naver.com'; // 내부 서비스 API (실시간 데이터)
+const SERVICE_API_BASE_URL = process.env.CHZZK_SERVICE_API_BASE_URL ?? 'https://api.chzzk.naver.com'; // 내부 서비스 API (실시간 데이터)
 /**
  * API 요청을 보내는 범용 함수
  * @param baseUrl 요청을 보낼 기본 URL
@@ -119,7 +119,7 @@ export async function GET(req: Request) {
       }
       // '/live-detail' 대신 채널 전체 정보를 요청하여 응답 내 liveDetail 객체 유무로 상태를 확인
       const apiPath = `/service/v1/channels/${encodeURIComponent(channelId)}`;
-      return await fetchApi(GAME_API_BASE_URL, apiPath, false); // 인증 헤더 불필요
+      return await fetchApi(SERVICE_API_BASE_URL, apiPath, false); // 인증 헤더 불필요
     } else if (type === 'videos') {
       // 내부 서비스 API를 사용한 채널의 다시보기 동영상 목록 조회
       const channelId = searchParams.get('channelId');
@@ -135,7 +135,7 @@ export async function GET(req: Request) {
       // 기본 페이징: limit=20, offset=0
 
       const apiPath = `/service/v1/channels/${encodeURIComponent(channelId)}/videos?limit=${limit}&offset=${offset}`;
-      return await fetchApi(GAME_API_BASE_URL, apiPath, false); // 인증 헤더 불필요
+      return await fetchApi(SERVICE_API_BASE_URL, apiPath, false); // 인증 헤더 불필요
     } else {
       return NextResponse.json(
         { error: "Invalid 'type' parameter. Use 'channel' | 'live-status' | 'videos'." },

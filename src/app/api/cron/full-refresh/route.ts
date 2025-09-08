@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';
 
-// 기본값(로컬/운영에서 쿼리 파라미터로 재정의 가능)
+// 기본값
 const DEFAULT_CONCURRENCY = 3; // 동시에 처리할 채널 개수
 const DEFAULT_BATCH_DELAY_MS = 400; // 배치 간 대기(ms)
 
 const CRON_SECRET = process.env.CRON_SECRET!;
 
-// 간단한 대기 유틸(배치 사이 지연용)
+// 배치 사이 지연용
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function POST(request: Request) {
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const origin = new URL(request.url).origin;
   const url = new URL(request.url);
 
-  /** 1) 런타임 파라미터(테스트 편의용 오버라이드) */
+  /** 1) 런타임 파라미터 */
   const overrideConcurrency = parseInt(url.searchParams.get('concurrency') || '') || DEFAULT_CONCURRENCY;
   const overrideBatchDelayMs = parseInt(url.searchParams.get('batchDelayMs') || '') || DEFAULT_BATCH_DELAY_MS;
   const limitCount = parseInt(url.searchParams.get('limit') || '') || undefined;
@@ -100,37 +100,30 @@ export async function POST(request: Request) {
   const sampleErrors: Array<{ channelId: string; status?: number; details?: string }> = [];
   const perChannelResults: Array<{ channelId: string; result: 'ok' | 'cooldown' | 'fail' }> = [];
 
-  /**
-   * 5) 단일 채널 동기화 헬퍼
-   * - 내부 라우트 `/api/sync/channel` 을 `mode:'full'`로 호출합니다.
-   * - full 모드는 설계상 쿨다운을 보지 않지만, 혹시나 429가 오면 카운팅만 합니다.
-   */
+  // 5) 단일 채널 동기화 헬퍼
+
   async function syncOneChannel(channelId: string): Promise<'ok' | 'cooldown' | 'fail'> {
     try {
       const response = await fetch(`${origin}/api/sync/channel`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-cron-secret': CRON_SECRET, // 내부 시크릿 전달(보호)
+          'x-cron-secret': CRON_SECRET,
         },
         body: JSON.stringify({ channelId, mode: 'full' }),
       });
 
-      // 참고: full 모드에서 429는 이례적이지만, 혹시 오면 집계만 함
       if (response.status === 429) {
         return 'cooldown';
       }
       if (!response.ok) {
-        // 실패 사유를 JSON→text 순으로 파싱하여 집계/샘플에 기록
         try {
           const text = await response.text();
           let reason = String(response.status);
           try {
             const json = JSON.parse(text);
             reason = json?.details || json?.error || reason;
-          } catch {
-            // JSON 아님 → 상태코드 문자열로 유지
-          }
+          } catch {}
           failReasons[reason] = (failReasons[reason] || 0) + 1;
           if (sampleErrors.length < 5) {
             sampleErrors.push({ channelId, status: response.status, details: reason });
