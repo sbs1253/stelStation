@@ -30,7 +30,7 @@ jobs:
             -X POST "$PROD_API_BASE/api/sync/recent-batch" \
             -H "content-type: application/json" \
             -H "x-cron-secret: $CRON_SECRET" \
-            -d '{}' | tee recent-batch.json
+            -d '{}'
 
       - name: Summary
         run: |
