@@ -23,7 +23,7 @@ export function parseFeedQueryFromURL(url: URL) {
   const idsFromBracket = sp.getAll('channelIds[]');
   const commaJoined = sp.get('channelIds');
 
-  let rawIds: string[] = [];
+  const rawIds: string[] = [];
   if (idsFromRepeated.length) rawIds.push(...idsFromRepeated);
   if (idsFromBracket.length) rawIds.push(...idsFromBracket);
   if (commaJoined && commaJoined.includes(',')) {
