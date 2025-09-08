@@ -36,16 +36,17 @@ export async function POST(request: Request) {
       durationMs: finishedAt.getTime() - startedAt.getTime(),
       snapshot: snapshotResult.data ?? null,
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     // 예기치 못한 네트워크/클라이언트 오류 등
     const finishedAt = new Date();
+    const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
       {
         ok: false,
         startedAt: startedAt.toISOString(),
         finishedAt: finishedAt.toISOString(),
         durationMs: finishedAt.getTime() - startedAt.getTime(),
-        error: { stage: 'unexpected', details: String(e?.message ?? e) },
+        error: { stage: 'unexpected', details: message },
       },
       { status: 502 }
     );
