@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import Providers from '@/app/providers';
 import GaTracker from '@/app/ga-tracker';
+import { Suspense } from 'react';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -61,7 +62,9 @@ export default function RootLayout({
                 gtag('config', '${gaId}', { send_page_view: false });
               `}
             </Script>
-            <GaTracker />
+            <Suspense fallback={null}>
+              <GaTracker />
+            </Suspense>
           </>
         ) : null}
       </body>
