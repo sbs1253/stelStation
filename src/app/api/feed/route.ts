@@ -1,5 +1,3 @@
-// Node 런타임
-
 import { NextResponse } from 'next/server';
 import { parseFeedQueryFromURL } from '@/lib/validations/feed';
 import { encodeCursor, decodeCursor } from '@/lib/paging/cursor';
@@ -20,16 +18,35 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Invalid query', details: error?.issues ?? String(error) }, { status: 400 });
   }
   if (isDebug) console.log('[feed] query', query);
-  // 2) 채널 집합(게스트 기준: channelIds 필요)
-  const channelIds = query.channelIds ?? [];
+
+  //  스코프/플랫폼 파라미터
+  const scope = (url.searchParams.get('scope') ?? 'all').toLowerCase(); // 'all' (기본)
+  const platformParam = (url.searchParams.get('platform') ?? 'all').toLowerCase(); // 'all' | 'youtube' | 'chzzk'
+
+  // 2) Supabase 클라이언트
+  const supabase = await createSupabaseServer();
+
+  // 3) 채널 집합 결정
+  let channelIds: string[] = query.channelIds ?? [];
+  if (!channelIds.length && scope === 'all') {
+    // channelIds가 없으면 전체(또는 플랫폼별) 채널 id를 DB에서 채움
+    let q = supabase.from('channels').select('id');
+    if (platformParam === 'youtube' || platformParam === 'chzzk') {
+      q = q.eq('platform', platformParam);
+    }
+    const { data, error } = await q;
+    if (error) {
+      return NextResponse.json({ error: 'DB error', details: error.message }, { status: 500 });
+    }
+    channelIds = (data ?? []).map((r: { id: string }) => r.id);
+  }
+
+  // 채널이 여전히 없으면 빈 응답
   if (!channelIds.length) {
     return NextResponse.json({ items: [], hasMore: false, cursor: null });
   }
 
-  // 4) Supabase 클라이언트
-  const supabase = await createSupabaseServer();
-
-  // 5) 정렬 분기 (RPC 호출)
+  // 4) 정렬 분기 (RPC 호출)
   if (query.sort === 'published') {
     // 커서 해석
     const initialState: PublishedCursorState = query.cursor
@@ -40,18 +57,15 @@ export async function GET(request: Request) {
       p_channel_ids: channelIds,
       p_window_start: null,
       p_pivot: initialState.pivot, // 없으면 null
-      p_limit: query.limit, // zod가 기본값 보장
+      p_limit: query.limit, // zod 기본값
       p_filter_type: query.filterType, // 'all' | 'video' | 'short' | 'live' | 'vod'
     });
 
     if (error) {
       return NextResponse.json({ error: 'DB error', details: error.message }, { status: 500 });
     }
-
-    // data 형태: { rows: [...], next_pivot: timestamptz|null, has_more: boolean }
     const rows: any[] = data?.rows ?? [];
     const items = rows.map(mapPublishedRowToItem);
-
     const nextPivot: string | null = data?.next_pivot ?? null;
     const hasMore: boolean = !!data?.has_more;
 
@@ -63,7 +77,6 @@ export async function GET(request: Request) {
 
   // 인기순(Δ): Day / Week — baseline(KST 어제/7일전)은 RPC 내부에서 계산
   const rpcName = query.sort === 'views_day' ? 'rpc_feed_ranking_day' : 'rpc_feed_ranking_week';
-
   const { data, error } = await supabase.rpc(rpcName, {
     p_channel_ids: channelIds,
     p_window_start: null,
@@ -75,12 +88,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'DB error', details: error.message }, { status: 500 });
   }
 
-  // data 형태: { rows: [...(delta_views 포함)], has_more: boolean }
   const rows: any[] = data?.rows ?? [];
   const sortKind: 'views_day' | 'views_week' = query.sort === 'views_day' ? 'views_day' : 'views_week';
   const items = rows.map((row) => mapRankingRowToItem(row, sortKind));
 
-  // NOTE: 랭킹은 MVP에선 커서 페이지네이션 미지원(첫 페이지 중심)
+  // NOTE: 랭킹은 MVP에선 커서 미지원(첫 페이지 중심)
   const hasMore: boolean = !!data?.has_more;
   const nextCursor = null;
 
