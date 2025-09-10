@@ -1,5 +1,4 @@
-// src/lib/youtube/client.ts
-
+import { supabaseService } from '@/lib/supabase/service';
 export type YouTubePlaylistPage = {
   ids: string[];
   nextPageToken?: string | null;
@@ -12,11 +11,11 @@ export type YouTubeVideoMeta = {
   publishedAt: string; // ISO
   durationSec: number | null;
   viewCount: number | null;
-  likeCount: number | null; // YouTube는 종종 비공개
+  likeCount: number | null;
   isLive: boolean;
   contentType: 'video' | 'short' | 'live' | 'vod';
 };
-
+type ChannelsIdResponse = { items?: Array<{ id?: string }> };
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY ?? '';
 const YOUTUBE_DEBUG = process.env.YOUTUBE_DEBUG === '1';
 
@@ -84,18 +83,49 @@ async function youtubeFetchJson<T>(url: string, attempt = 1): Promise<T> {
 }
 
 /** 채널 UCID → 업로드 재생목록 ID */
-export async function getUploadsPlaylistId(channelId: string): Promise<string | null> {
+export async function getUploadsPlaylistId(platformChannelId: string): Promise<string | null> {
   if (!YOUTUBE_API_KEY) return null;
 
-  type ChannelsResponse = {
-    items?: Array<{ contentDetails?: { relatedPlaylists?: { uploads?: string } } }>;
-  };
+  // 0) DB 캐시 우선
+  {
+    const { data, error } = await supabaseService
+      .from('channels')
+      .select('id, uploads_playlist_id, platform, platform_channel_id')
+      .eq('platform', 'youtube')
+      .eq('platform_channel_id', platformChannelId)
+      .maybeSingle();
 
-  const data = await youtubeFetchJson<ChannelsResponse>(
-    `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${encodeURIComponent(channelId)}`
-  );
+    if (!error && data?.uploads_playlist_id) {
+      return data.uploads_playlist_id;
+    }
+  }
 
-  return data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads ?? null;
+  // 1) UC → UU 파생 (정상 케이스)
+  let derived: string | null = null;
+  if (platformChannelId.startsWith('UC') && platformChannelId.length === 24) {
+    derived = 'UU' + platformChannelId.slice(2);
+  } else {
+    // 2) 예외: UC가 아니면 1회만 API로 UC 정규화 후 파생
+    const resp = await youtubeFetchJson<ChannelsIdResponse>(
+      `https://www.googleapis.com/youtube/v3/channels?part=id&id=${encodeURIComponent(platformChannelId)}`
+    );
+    const uc = resp.items?.[0]?.id;
+    if (uc && uc.startsWith('UC') && uc.length === 24) {
+      derived = 'UU' + uc.slice(2);
+    }
+  }
+
+  if (!derived) return null;
+
+  // 3) 캐시 백필(경쟁 상태 안전: 기존 값 null일 때만)
+  await supabaseService
+    .from('channels')
+    .update({ uploads_playlist_id: derived })
+    .eq('platform', 'youtube')
+    .eq('platform_channel_id', platformChannelId)
+    .is('uploads_playlist_id', null);
+
+  return derived;
 }
 
 /** 업로드 재생목록 → videoId 배열 (1페이지) */
