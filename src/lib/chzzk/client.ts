@@ -31,7 +31,6 @@ type ChzzkServiceChannel = {
   channelDescription: string;
   followerCount: number;
   openLive: boolean;
-  // ... 이 외에도 더 많은 필드가 있지만, 주요한 것들만 정의
 };
 
 type ChzzkServiceChannelResponse = {
@@ -78,6 +77,7 @@ type VideoCacheRow = {
   like_count: number | null;
   content_type: 'video' | 'short' | 'live' | 'vod';
   is_live: boolean;
+  chzzk_video_no: number | null;
 };
 
 /** 공통 fetch (타임아웃 포함) */
@@ -184,12 +184,11 @@ export function mapChzzkVideoToCacheRow(channelUuid: string, v: ChzzkServiceVide
   const contentType =
     v.videoType === 'LIVE' ? 'live' : v.videoType === 'REPLAY' || v.videoType === 'VOD' ? 'vod' : 'video';
 
-  // published_at 변환(밀리초 우선, 없으면 문자열 파싱 시도)
   const publishedIso =
     typeof v.publishDateAt === 'number'
       ? new Date(v.publishDateAt).toISOString()
       : v.publishDate
-      ? new Date(v.publishDate).toISOString()
+      ? new Date(v.publishDate.replace(' ', 'T') + '+09:00').toISOString()
       : new Date().toISOString();
 
   return {
@@ -204,5 +203,6 @@ export function mapChzzkVideoToCacheRow(channelUuid: string, v: ChzzkServiceVide
     like_count: null, // 제공 X
     is_live: contentType === 'live',
     content_type: contentType as 'video' | 'short' | 'live' | 'vod',
+    chzzk_video_no: typeof v.videoNo === 'number' ? v.videoNo : null,
   };
 }

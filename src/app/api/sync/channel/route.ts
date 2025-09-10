@@ -9,7 +9,6 @@ import {
   getChzzkVideosPage,
   mapChzzkVideoToCacheRow,
 } from '@/lib/chzzk/client';
-import { beginOp, ok, err } from '@/lib/http/batchResponse';
 
 /** 내부 보호: 헤더 시크릿 확인 */
 function requireCronSecret(req: Request) {
@@ -113,7 +112,7 @@ async function doYoutubeSync(
 export async function POST(request: Request) {
   // 0) 내부 보호
   if (!requireCronSecret(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
   // 1) 입력 파싱 (zod)
@@ -121,11 +120,9 @@ export async function POST(request: Request) {
   try {
     body = parseSyncBody(await request.json());
   } catch (e: any) {
-    return NextResponse.json({ error: 'Invalid body', details: e?.issues ?? String(e) }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'Invalid body', details: e?.issues ?? String(e) }, { status: 400 });
   }
 
-  // 표준 응답 컨텍스트 시작
-  const context = beginOp('sync-channel', request, body.mode);
   const operationStartedAt = new Date(); // duration 계산용
 
   // 2) 채널 조회 (DB 내부 uuid)
@@ -138,10 +135,13 @@ export async function POST(request: Request) {
     .single();
 
   if (channelSelectError) {
-    return err(context, 500, 'DB', 'DB error', channelSelectError.message);
+    return NextResponse.json(
+      { ok: false, error: 'DB', message: 'DB error', details: channelSelectError.message },
+      { status: 500 }
+    );
   }
   if (!channelRecord) {
-    return err(context, 404, 'NOT_FOUND', 'Channel not found');
+    return NextResponse.json({ ok: false, error: 'NOT_FOUND', message: 'Channel not found' }, { status: 404 });
   }
 
   const now = new Date();
@@ -151,12 +151,15 @@ export async function POST(request: Request) {
   if (!body.force && body.mode === 'recent' && channelRecord.sync_cooldown_until) {
     const cooldownUntilDate = new Date(channelRecord.sync_cooldown_until);
     if (cooldownUntilDate > now) {
-      return err(context, 429, 'COOLDOWN', 'Cooldown', { cooldownUntil: cooldownUntilDate.toISOString() });
+      return NextResponse.json(
+        { ok: false, error: 'COOLDOWN', message: 'Cooldown', cooldownUntil: cooldownUntilDate.toISOString() },
+        { status: 429 }
+      );
     }
   }
 
   // 집계 통계: 외부에서 가져온 개수(fetched) / DB upsert된 개수(upserted)
-  const stats = { fetched: 0, upserted: 0 };
+  const stats = { fetched: 0, upserted: 0 } as { fetched: number; upserted: number };
 
   // 4) 플랫폼별 동기화
   try {
@@ -297,34 +300,44 @@ export async function POST(request: Request) {
         }
       }
     } else {
-      return err(context, 400, 'UNSUPPORTED_PLATFORM', 'Unsupported platform', channelRecord.platform);
+      return NextResponse.json(
+        { ok: false, error: 'UNSUPPORTED_PLATFORM', message: 'Unsupported platform', details: channelRecord.platform },
+        { status: 400 }
+      );
     }
   } catch (e: any) {
     // 외부 API/업서트 실패 등
-    return err(context, 502, 'SYNC_FAILED', 'Sync failed', String(e?.message ?? e));
+    return NextResponse.json(
+      { ok: false, error: 'SYNC_FAILED', message: 'Sync failed', details: String(e?.message ?? e) },
+      { status: 502 }
+    );
   }
 
   // 5) 채널 상태 갱신 (recent만 쿨타임 부여)
   const cooldownUntilISO =
-    body.mode === 'recent' ? new Date(now.getTime() + SYNC_COOLDOWN_MIN * 60_000).toISOString() : null;
+    body.mode === 'recent' ? new Date(Date.now() + SYNC_COOLDOWN_MIN * 60_000).toISOString() : null;
 
   const { error: channelUpdateError } = await supabaseService
     .from('channels')
     .update({
-      last_synced_at: nowISO,
+      last_synced_at: new Date().toISOString(),
       ...(cooldownUntilISO ? { sync_cooldown_until: cooldownUntilISO } : {}),
     })
     .eq('id', channelRecord.id);
 
   if (channelUpdateError) {
-    return err(context, 500, 'DB', 'DB error', channelUpdateError.message);
+    return NextResponse.json(
+      { ok: false, error: 'DB', message: 'DB error', details: channelUpdateError.message },
+      { status: 500 }
+    );
   }
 
   // 6) 응답
   const finishedAt = new Date();
   const durationMs = finishedAt.getTime() - operationStartedAt.getTime();
 
-  return ok(context, {
+  return NextResponse.json({
+    ok: true,
     queued: true,
     mode: body.mode,
     channelId: channelRecord.id,

@@ -1,5 +1,17 @@
+import { makeVideoUrl } from '@/lib/links';
+
 /** RPC row → API item (최신순/공통) */
 export function mapPublishedRowToItem(row: any) {
+  const url =
+    makeVideoUrl({
+      platform: row.platform,
+      platformChannelId: row.platform_channel_id,
+      platformVideoId: row.platform_video_id,
+      isLive: row.is_live_now,
+      contentType: row.content_type,
+      chzzkVideoNo: row.chzzk_video_no,
+    }) ?? undefined;
+
   return {
     videoId: row.platform_video_id,
     platform: row.platform,
@@ -8,7 +20,7 @@ export function mapPublishedRowToItem(row: any) {
     thumb: row.thumbnail_url ?? null,
     publishedAt: row.published_at,
     durationSec: row.duration_sec ?? null,
-    isLive: !!row.is_live,
+    isLive: !!row.is_live_now,
     contentType: row.content_type,
     stats: {
       views: row.view_count ?? null,
@@ -18,6 +30,7 @@ export function mapPublishedRowToItem(row: any) {
       isLiveNow: !!row.is_live_now,
       hadLive24h: !!row.had_live_24h,
     },
+    url,
   };
 }
 
