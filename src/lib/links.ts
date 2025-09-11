@@ -5,7 +5,7 @@ export function makeChannelUrl(platform: Platform, platformChannelId: string): s
     return `https://www.youtube.com/channel/${encodeURIComponent(platformChannelId)}`;
   }
   // chzzk
-  return `https://chzzk.naver.com/channel/${encodeURIComponent(platformChannelId)}`;
+  return `https://chzzk.naver.com/${encodeURIComponent(platformChannelId)}`;
 }
 
 export function makeLiveUrl(platformChannelId: string): string {
