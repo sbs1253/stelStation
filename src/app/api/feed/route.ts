@@ -194,12 +194,9 @@ export async function GET(request: Request) {
               title: ch.title,
               thumb: ch.thumb,
               isLiveNow: ch.isLiveNow,
-              url:
-                ch.platform && ch.platformChannelId
-                  ? ch.platform === 'youtube'
-                    ? `https://www.youtube.com/channel/${encodeURIComponent(ch.platformChannelId)}`
-                    : `https://chzzk.naver.com/channel/${encodeURIComponent(ch.platformChannelId)}`
-                  : undefined,
+              url: ch.platformChannelId
+                ? makeChannelUrl(ch.platform as 'youtube' | 'chzzk', ch.platformChannelId)
+                : undefined,
             },
           }
         : base;
@@ -220,4 +217,5 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ items, hasMore, cursor: nextCursor });
   }
+  return NextResponse.json({ error: 'Invalid sort' }, { status: 400 });
 }
