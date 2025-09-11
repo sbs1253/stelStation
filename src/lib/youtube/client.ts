@@ -3,7 +3,16 @@ export type YouTubePlaylistPage = {
   ids: string[];
   nextPageToken?: string | null;
 };
-
+export type YoutubeChannelMeta = {
+  id: string;
+  title: string | null;
+  thumbnailUrl: string | null;
+  customUrl: string | null;
+  country: string | null;
+  subscriberCount: number | null;
+  videoCount: number | null;
+  viewCount: number | null;
+};
 export type YouTubeVideoMeta = {
   id: string;
   title: string;
@@ -80,6 +89,65 @@ async function youtubeFetchJson<T>(url: string, attempt = 1): Promise<T> {
   }
 
   return res.json() as Promise<T>;
+}
+
+// === 채널 메타(정규화) ===
+export async function getYoutubeChannelMeta(ucid: string): Promise<YoutubeChannelMeta | null> {
+  if (!YOUTUBE_API_KEY) return null;
+
+  type ChannelsResp = {
+    items?: Array<{
+      id: string;
+      snippet?: {
+        title?: string;
+        customUrl?: string;
+        country?: string;
+        thumbnails?: {
+          default?: { url?: string };
+          medium?: { url?: string };
+          high?: { url?: string };
+        };
+      };
+      statistics?: {
+        subscriberCount?: string;
+        videoCount?: string;
+        viewCount?: string;
+      };
+    }>;
+  };
+
+  const url =
+    `https://www.googleapis.com/youtube/v3/channels` + `?part=snippet,statistics&id=${encodeURIComponent(ucid)}`;
+
+  const data = await youtubeFetchJson<ChannelsResp>(url);
+  const item = data.items?.[0];
+  if (!item) return null;
+
+  const thumb =
+    item.snippet?.thumbnails?.high?.url ??
+    item.snippet?.thumbnails?.medium?.url ??
+    item.snippet?.thumbnails?.default?.url ??
+    null;
+
+  return {
+    id: item.id,
+    title: item.snippet?.title ?? null,
+    thumbnailUrl: thumb,
+    customUrl: item.snippet?.customUrl ?? null,
+    country: item.snippet?.country ?? null,
+    subscriberCount: item.statistics?.subscriberCount ? Number(item.statistics.subscriberCount) : null,
+    videoCount: item.statistics?.videoCount ? Number(item.statistics.videoCount) : null,
+    viewCount: item.statistics?.viewCount ? Number(item.statistics.viewCount) : null,
+  };
+}
+
+// === 채널 메타(원본 RAW 확인용) ===
+export async function fetchYoutubeChannelRaw(ucid: string, parts = 'snippet,statistics'): Promise<any> {
+  if (!YOUTUBE_API_KEY) return {};
+  const url =
+    `https://www.googleapis.com/youtube/v3/channels` +
+    `?part=${encodeURIComponent(parts)}&id=${encodeURIComponent(ucid)}`;
+  return youtubeFetchJson<any>(url);
 }
 
 /** 채널 UCID → 업로드 재생목록 ID */

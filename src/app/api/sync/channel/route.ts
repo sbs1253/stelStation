@@ -2,14 +2,13 @@ import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';
 import { parseSyncBody } from '@/lib/validations/sync';
 import { SYNC_COOLDOWN_MIN } from '@/lib/config/constants';
-import { getUploadsPlaylistId, listPlaylistItems, batchGetVideos } from '@/lib/youtube/client';
+import { getUploadsPlaylistId, listPlaylistItems, batchGetVideos, getYoutubeChannelMeta } from '@/lib/youtube/client';
 import {
   getChzzkChannelMeta,
   getChzzkLiveStatus,
   getChzzkVideosPage,
   mapChzzkVideoToCacheRow,
 } from '@/lib/chzzk/client';
-
 /** 내부 보호: 헤더 시크릿 확인 */
 function requireCronSecret(req: Request) {
   const provided = req.headers.get('x-cron-secret') ?? '';
@@ -164,6 +163,25 @@ export async function POST(request: Request) {
   // 4) 플랫폼별 동기화
   try {
     if (channelRecord.platform === 'youtube') {
+      // (A) 채널 메타 갱신: 제목/썸네일이 비어있거나 바뀌었으면 업데이트
+      try {
+        const meta = await getYoutubeChannelMeta(channelRecord.platform_channel_id);
+        if (meta) {
+          const updates: Record<string, any> = {};
+          if (meta.title && meta.title !== channelRecord.title) {
+            updates.title = meta.title;
+          }
+          if (meta.thumbnailUrl && meta.thumbnailUrl !== channelRecord.thumbnail_url) {
+            updates.thumbnail_url = meta.thumbnailUrl;
+          }
+          if (Object.keys(updates).length) {
+            const r = await supabaseService.from('channels').update(updates).eq('id', channelRecord.id);
+            if (r.error) throw r.error;
+          }
+        }
+      } catch (e) {
+        console.error('[youtube] channel meta refresh skipped', e);
+      }
       // YouTube 메타 수집
       const youtubeSyncResult = await doYoutubeSync(channelRecord.platform_channel_id, body.mode);
 
