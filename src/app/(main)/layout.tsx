@@ -7,7 +7,7 @@ interface MainLayoutProps {
 
 export default function MainLayout({ children }: MainLayoutProps) {
   return (
-    <div className="min-w-svw  bg-background text-foreground">
+    <div className="w-full bg-background text-foreground">
       <Header />
       {children}
     </div>

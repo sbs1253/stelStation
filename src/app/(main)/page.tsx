@@ -1,26 +1,39 @@
+// src/app/(main)/page.tsx
 import Ui from '@/app/(main)/ui';
+import { headers } from 'next/headers';
+
 export const revalidate = 30;
 
-export default async function Home() {
-  const scope = 'all';
+type SP = Promise<Record<string, string | string[] | undefined>>;
 
-  const base = process.env.NEXT_PUBLIC_SITE_URL!;
+export default async function Home({ searchParams }: { searchParams: SP }) {
+  const sp = await searchParams;
+  const scope = typeof sp.scope === 'string' ? sp.scope : 'all';
+  const sort = typeof sp.sort === 'string' ? sp.sort : 'published';
+  const limit = typeof sp.limit === 'string' ? sp.limit : '10';
+  const platform = typeof sp.platform === 'string' ? sp.platform : 'all';
+
+  // 배포/프록시 환경에서 안전하게 호스트를 가져오기
+  const host = (await headers()).get('host');
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? (host ? `https://${host}` : 'http://localhost:3000');
+  console.log(sort);
   const url = new URL('/api/feed', base);
-  url.searchParams.set('scope', 'all');
-  url.searchParams.set('sort', 'published');
-  url.searchParams.set('limit', '8');
-  const res = await fetch(url.toString(), { next: { revalidate: 30 } });
+  url.searchParams.set('scope', scope);
+  url.searchParams.set('sort', sort);
+  url.searchParams.set('limit', limit);
+  url.searchParams.set('platform', platform);
+
+  const res = await fetch(url.toString(), { next: { revalidate } });
   if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
   const data = await res.json();
-  console.log(data.items[5]);
+
   return (
     <Ui
       initialItems={data.items}
-      initialHasMore={!!data?.has_more}
-      initialCursor={data?.next_cursor}
-      initialSort="published"
-      initialFilterType="all"
-      initialPlatform="all"
+      initialHasMore={data.hasMore}
+      initialCursor={data.cursor}
+      initialSort={sort as 'published' | 'views_day' | 'views_week'}
+      initialPlatform={platform as 'all' | 'youtube' | 'chzzk'}
     />
   );
 }
