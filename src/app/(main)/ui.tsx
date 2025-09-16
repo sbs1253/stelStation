@@ -5,7 +5,7 @@ import Filter from '@/app/(main)/_component/filter';
 import SideBar from '@/app/(main)/_component/sideBar';
 import { formatKSTDate } from '@/lib/time/kst';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDuration } from '@/lib/time/duration';
@@ -47,7 +47,7 @@ type Props = {
   initialHasMore: boolean;
   initialCursor: string | null;
   initialSort: 'published' | 'views_day' | 'views_week';
-  // initialFilterType: 'all' | 'video' | 'short' | 'live' | 'vod';
+  initialFilterType: 'all' | 'video' | 'short' | 'live' | 'vod';
   initialPlatform: 'all' | 'youtube' | 'chzzk';
 };
 
@@ -63,23 +63,38 @@ export default function Ui({
   const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>(initialPlatform);
   const [sort, setSort] = useState<'published' | 'views_day' | 'views_week'>(initialSort);
   // const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'live' | 'vod'>(initialFilterType);
-  // const [cursor, setCursor] = useState<string | null>(initialCursor);
-  // const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
-  // const [select, setSelect] = useState<string>('all');
-
+  const [cursor, setCursor] = useState<string | null>(initialCursor);
+  const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
+  console.log(items);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // 중복 호출 가드 (fetch 중엔 또 부르지 않게)
+  const loadingRef = useRef(false);
+  // 중복 아이템 가드 (이미 붙인 videoId 재삽입 방지)
+  const seenIdsRef = useRef<Set<string>>(new Set(initialItems.map((i) => i.videoId)));
+
+  // 현재 화면 조건(플랫폼|정렬) 키 보관 → 스테일 응답 가드에 사용
+  const paramsKeyRef = useRef('');
+  useEffect(() => {
+    paramsKeyRef.current = `${platform}|${sort}`;
+  }, [platform, sort]);
+
   useEffect(() => {
     setItems(initialItems);
-  }, [initialItems]);
+    setCursor(initialCursor);
+    setHasMore(initialHasMore);
+    seenIdsRef.current = new Set(initialItems.map((i) => i.videoId));
+    console.log(seenIdsRef.current, 'seenIdsRef.current');
+    loadingRef.current = false;
+  }, [initialItems, initialCursor, initialHasMore]);
 
   // URL → 탭 상태 동기화 (초기 렌더링 및 URL 변경시)
   useEffect(() => {
     const urlPlatform = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
     const urlSort = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    console.log(urlSort);
     if (urlSort !== sort) {
       setSort(urlSort);
     }
@@ -92,7 +107,6 @@ export default function Ui({
   useEffect(() => {
     const currentInUrl = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
     const sortInUrl = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    console.log(sortInUrl);
     if (currentInUrl === platform && sortInUrl === sort) return;
 
     const sp = new URLSearchParams(searchParams.toString());
@@ -110,63 +124,134 @@ export default function Ui({
     router.replace(`${pathname}?${sp.toString()}`);
   }, [platform, sort, pathname, router, searchParams]);
 
+  async function fetchMore() {
+    if (loadingRef.current) return;
+    if (!hasMore || !cursor) return;
+    loadingRef.current = true;
+
+    // 요청 시점의 조건 스냅샷 (플랫폼|정렬)
+    const requestedKey = paramsKeyRef.current;
+
+    try {
+      const sp = new URLSearchParams(searchParams.toString());
+      sp.set('cursor', cursor);
+      const url = `/api/feed?${sp.toString()}`;
+
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
+      const data = await res.json();
+
+      // 요청 중에 플랫폼/정렬이 바뀌었으면(=스테일 응답) 폐기
+      if (paramsKeyRef.current !== requestedKey) return;
+
+      // 중복 아이템 제거
+      const newItems: FeedItem[] = (data.items || []).filter((item: FeedItem) => {
+        if (seenIdsRef.current.has(item.videoId)) return false;
+        seenIdsRef.current.add(item.videoId);
+        return true;
+      });
+
+      setItems((prev) => [...prev, ...newItems]);
+      setCursor(data.cursor ?? null);
+      setHasMore(!!data.hasMore);
+    } catch (e) {
+      console.error('Feed fetch failed', e);
+    } finally {
+      loadingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const ent = entries[0];
+        if (ent.isIntersecting) fetchMore();
+      },
+      {
+        root: null,
+        rootMargin: '100px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [cursor, hasMore, searchParams]);
+
   return (
-    <div className="flex gap-4">
+    <div className="flex w-full h-screen">
       <SideBar />
-      <div className="flex-1">
-        <div className="flex justify-between items-center mb-4">
-          <FeedTab value={platform} onChange={setPlatform} />
-          <Filter value={sort} onChange={setSort} />
+      <main className="flex-1 overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b">
+          <div className="flex justify-between items-center">
+            <FeedTab value={platform} onChange={setPlatform} />
+            <Filter value={sort} onChange={setSort} />
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {items.map((item) => {
-            return (
-              <div key={item.videoId} className="flex flex-col overflow-hidden ">
-                <div className="relative aspect-video transition cursor-pointer">
-                  <Link href={item.url} key={item.videoId} className="inline-block w-full h-full ">
-                    <Image
-                      src={item.thumb || ''}
-                      alt={item.title}
-                      fill
-                      sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
-                      className="object-cover rounded hover:scale-[1.01] transition"
-                    />
-                  </Link>
 
-                  {item.platform === 'youtube' ? (
-                    <div className="absolute top-0 right-0">
-                      <Image src={youtube_icon} alt="유튜브 아이콘" width={32} height={32} />
-                    </div>
-                  ) : (
-                    <div className="absolute top-1 right-1">
-                      <Image src={chzzk_icon} alt="치지직 아이콘" width={24} height={24} />
-                    </div>
-                  )}
-                  <span className="absolute bottom-0 right-1 bg-black/50 text-white text-xs px-1 rounded">
-                    {item.durationSec !== null && formatDuration(item.durationSec)}
-                  </span>
-                </div>
+        <div className="p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {items.map((item) => (
+              <VideoCard key={item.videoId} item={item} />
+            ))}
+          </div>
 
-                <div className="flex gap-2 pt-3 px-1">
-                  <Link href={item.channel.url}>
-                    <Avatar className="size-10">
-                      <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
-                      <AvatarFallback>{item.channel.title}</AvatarFallback>
-                    </Avatar>
-                  </Link>
-                  <div className="relative flex flex-col items-start ">
-                    <Link href={item.url}>
-                      <h4 className="font-bold">{item.title}</h4>
-                    </Link>
-                    <Link href={item.channel.url} className="hover:underline">
-                      <span className="text-sm text-gray-600">{item.channel.title}</span>
-                    </Link>
-                    <p className="text-sm text-gray-600">{formatKSTDate(new Date(item.publishedAt || ''))}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {hasMore && (
+            <div ref={sentinelRef} className="h-8 my-8 grid place-items-center text-xs text-gray-500">
+              {loadingRef.current ? '불러오는 중…' : '아래로 스크롤하여 더 보기'}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// 1. VideoCard를 별도의 컴포넌트로 분리하여 가독성과 재사용성 향상 -> 추후 파일 분리 예정
+function VideoCard({ item }: { item: FeedItem }) {
+  return (
+    <div className="flex flex-col overflow-hidden">
+      <Link href={item.url} className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200">
+        <Image
+          src={item.thumb || ''}
+          alt={item.title}
+          fill
+          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
+          // 👈 group-hover를 사용해 부모 Link에 호버 시 이미지 확대
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+        {item.platform === 'youtube' ? (
+          <div className="absolute top-2 right-2 group-hover:scale-105">
+            <Image src={youtube_icon} alt="유튜브 아이콘" width={24} height={24} />
+          </div>
+        ) : (
+          <div className="absolute top-2 right-2">
+            <Image src={chzzk_icon} alt="치지직 아이콘" width={20} height={20} />
+          </div>
+        )}
+        <span className="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1 rounded">
+          {item.durationSec !== null && formatDuration(item.durationSec)}
+        </span>
+      </Link>
+
+      <div className="flex gap-3 pt-3">
+        <Link href={item.channel.url}>
+          <Avatar className="size-10">
+            <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
+            <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
+          </Avatar>
+        </Link>
+        <div className="flex flex-col items-start">
+          <Link href={item.url}>
+            <h4 className="font-bold leading-snug">{item.title}</h4>
+          </Link>
+          <Link href={item.channel.url} className="hover:underline">
+            <span className="text-sm text-gray-600">{item.channel.title}</span>
+          </Link>
+          <p className="text-sm text-gray-600">{formatKSTDate(new Date(item.publishedAt || ''))}</p>
         </div>
       </div>
     </div>

@@ -10,18 +10,19 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const scope = typeof sp.scope === 'string' ? sp.scope : 'all';
   const sort = typeof sp.sort === 'string' ? sp.sort : 'published';
-  const limit = typeof sp.limit === 'string' ? sp.limit : '10';
+  const limit = typeof sp.limit === 'string' ? sp.limit : '24';
   const platform = typeof sp.platform === 'string' ? sp.platform : 'all';
+  const filter = typeof sp.filter === 'string' ? sp.filter : 'video';
 
   // 배포/프록시 환경에서 안전하게 호스트를 가져오기
   const host = (await headers()).get('host');
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? (host ? `https://${host}` : 'http://localhost:3000');
-  console.log(sort);
   const url = new URL('/api/feed', base);
   url.searchParams.set('scope', scope);
   url.searchParams.set('sort', sort);
   url.searchParams.set('limit', limit);
   url.searchParams.set('platform', platform);
+  url.searchParams.set('filter', filter);
 
   const res = await fetch(url.toString(), { next: { revalidate } });
   if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
@@ -34,6 +35,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
       initialCursor={data.cursor}
       initialSort={sort as 'published' | 'views_day' | 'views_week'}
       initialPlatform={platform as 'all' | 'youtube' | 'chzzk'}
+      initialFilterType={filter as 'all' | 'video' | 'short' | 'live' | 'vod'}
     />
   );
 }

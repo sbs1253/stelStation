@@ -15,17 +15,19 @@ export default function Filter({
   ];
 
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as any)}>
-      <SelectTrigger className="w-[180px]">
-        <SelectValue placeholder="정렬" />
-      </SelectTrigger>
-      <SelectContent>
-        {opts.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex items-center space-x-2">
+      <Select value={value} onValueChange={(v) => onChange(v as 'published' | 'views_day' | 'views_week')}>
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="정렬" />
+        </SelectTrigger>
+        <SelectContent>
+          {opts.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
