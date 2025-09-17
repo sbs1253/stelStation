@@ -1,7 +1,6 @@
 'use client';
 
 import FeedTab from '@/app/(main)/_component/feedTab';
-import Filter from '@/app/(main)/_component/filter';
 import SideBar from '@/app/(main)/_component/sideBar';
 import { formatKSTDate } from '@/lib/time/kst';
 import Link from 'next/link';
@@ -12,6 +11,8 @@ import { formatDuration } from '@/lib/time/duration';
 import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
 import youtube_icon from '@/assets/icons/youtube_Icon.png';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import ContentTypeFilter from '@/app/(main)/_component/contentTypeFilter';
+import SortFilter from '@/app/(main)/_component/sortFilter';
 
 type FeedItem = {
   videoId: string;
@@ -56,16 +57,15 @@ export default function Ui({
   initialHasMore,
   initialCursor,
   initialSort,
-  // initialFilterType,
+  initialFilterType,
   initialPlatform,
 }: Props) {
   const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>(initialPlatform);
   const [sort, setSort] = useState<'published' | 'views_day' | 'views_week'>(initialSort);
-  // const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'live' | 'vod'>(initialFilterType);
+  const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'live' | 'vod'>(initialFilterType);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
-  console.log(items);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -79,15 +79,14 @@ export default function Ui({
   // 현재 화면 조건(플랫폼|정렬) 키 보관 → 스테일 응답 가드에 사용
   const paramsKeyRef = useRef('');
   useEffect(() => {
-    paramsKeyRef.current = `${platform}|${sort}`;
-  }, [platform, sort]);
+    paramsKeyRef.current = `${platform}|${sort}|${filterType}`;
+  }, [platform, sort, filterType]);
 
   useEffect(() => {
     setItems(initialItems);
     setCursor(initialCursor);
     setHasMore(initialHasMore);
     seenIdsRef.current = new Set(initialItems.map((i) => i.videoId));
-    console.log(seenIdsRef.current, 'seenIdsRef.current');
     loadingRef.current = false;
   }, [initialItems, initialCursor, initialHasMore]);
 
@@ -95,8 +94,12 @@ export default function Ui({
   useEffect(() => {
     const urlPlatform = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
     const urlSort = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
+    const urlFilter = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
     if (urlSort !== sort) {
       setSort(urlSort);
+    }
+    if (urlFilter !== filterType) {
+      setFilterType(urlFilter);
     }
     if (urlPlatform !== platform) {
       setPlatform(urlPlatform);
@@ -105,81 +108,86 @@ export default function Ui({
 
   // 탭 상태 → URL 동기화 (변경시에만, 히스토리 누적 없이 교체)
   useEffect(() => {
-    const currentInUrl = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
+    const platformInUrl = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
     const sortInUrl = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    if (currentInUrl === platform && sortInUrl === sort) return;
-
+    const filterInUrl = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
+    if (platformInUrl === platform && sortInUrl === sort && filterInUrl === filterType) return;
+    console.log(filterInUrl);
     const sp = new URLSearchParams(searchParams.toString());
     if (sort === 'published') {
       sp.delete('sort');
     } else {
       sp.set('sort', sort);
     }
-
+    if (filterType === 'all') {
+      sp.delete('filterType');
+    } else {
+      sp.set('filterType', filterType);
+    }
     if (platform === 'all') {
       sp.delete('platform');
     } else {
       sp.set('platform', platform);
     }
     router.replace(`${pathname}?${sp.toString()}`);
-  }, [platform, sort, pathname, router, searchParams]);
+  }, [platform, sort, filterType, pathname, router, searchParams]);
 
-  async function fetchMore() {
-    if (loadingRef.current) return;
-    if (!hasMore || !cursor) return;
-    loadingRef.current = true;
+  // async function fetchMore() {
+  //   if (loadingRef.current) return;
+  //   if (!hasMore || !cursor) return;
+  //   loadingRef.current = true;
 
-    // 요청 시점의 조건 스냅샷 (플랫폼|정렬)
-    const requestedKey = paramsKeyRef.current;
+  //   // 요청 시점의 조건 스냅샷 (플랫폼|정렬)
+  //   const requestedKey = paramsKeyRef.current;
 
-    try {
-      const sp = new URLSearchParams(searchParams.toString());
-      sp.set('cursor', cursor);
-      const url = `/api/feed?${sp.toString()}`;
+  //   try {
+  //     const sp = new URLSearchParams(searchParams.toString());
+  //     sp.set('cursor', cursor);
+  //     const url = `/api/feed?${sp.toString()}`;
 
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
-      const data = await res.json();
+  //     const res = await fetch(url, { cache: 'no-store' });
+  //     if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
+  //     const data = await res.json();
 
-      // 요청 중에 플랫폼/정렬이 바뀌었으면(=스테일 응답) 폐기
-      if (paramsKeyRef.current !== requestedKey) return;
+  //     // 요청 중에 플랫폼/정렬이 바뀌었으면(=스테일 응답) 폐기
+  //     if (paramsKeyRef.current !== requestedKey) return;
 
-      // 중복 아이템 제거
-      const newItems: FeedItem[] = (data.items || []).filter((item: FeedItem) => {
-        if (seenIdsRef.current.has(item.videoId)) return false;
-        seenIdsRef.current.add(item.videoId);
-        return true;
-      });
+  //     // 중복 아이템 제거
+  //     const newItems: FeedItem[] = (data.items || []).filter((item: FeedItem) => {
+  //       if (seenIdsRef.current.has(item.videoId)) return false;
+  //       seenIdsRef.current.add(item.videoId);
+  //       return true;
+  //     });
 
-      setItems((prev) => [...prev, ...newItems]);
-      setCursor(data.cursor ?? null);
-      setHasMore(!!data.hasMore);
-    } catch (e) {
-      console.error('Feed fetch failed', e);
-    } finally {
-      loadingRef.current = false;
-    }
-  }
+  //     setItems((prev) => [...prev, ...newItems]);
+  //     setCursor(data.cursor ?? null);
+  //     setHasMore(!!data.hasMore);
+  //   } catch (e) {
+  //     console.error('Feed fetch failed', e);
+  //   } finally {
+  //     loadingRef.current = false;
+  //   }
+  // }
 
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
+  // useEffect(() => {
+  //   const el = sentinelRef.current;
+  //   if (!el) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const ent = entries[0];
-        if (ent.isIntersecting) fetchMore();
-      },
-      {
-        root: null,
-        rootMargin: '100px 0px',
-        threshold: 0,
-      }
-    );
+  //   const observer = new IntersectionObserver(
+  //     (entries) => {
+  //       const ent = entries[0];
+  //       if (ent.isIntersecting) fetchMore();
+  //     },
+  //     {
+  //       root: null,
+  //       rootMargin: '100px 0px',
+  //       threshold: 0,
+  //     }
+  //   );
 
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [cursor, hasMore, searchParams]);
+  //   observer.observe(el);
+  //   return () => observer.disconnect();
+  // }, [cursor, hasMore, searchParams]);
 
   return (
     <div className="flex w-full h-screen">
@@ -188,7 +196,10 @@ export default function Ui({
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b">
           <div className="flex justify-between items-center">
             <FeedTab value={platform} onChange={setPlatform} />
-            <Filter value={sort} onChange={setSort} />
+            <div className="flex gap-2">
+              <SortFilter value={sort} onChange={setSort} />
+              <ContentTypeFilter value={filterType} onChange={setFilterType} />
+            </div>
           </div>
         </div>
 

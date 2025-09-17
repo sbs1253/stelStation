@@ -1,16 +1,8 @@
 'use client';
-
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import chzzk_logo from '@/assets/icons/chzzk_logo.png';
-import youtube_logo from '@/assets/icons/youtube_logo.png';
-import { LayoutGrid } from 'lucide-react';
+import youtube_icon from '@/assets/icons/youtube_Icon.png';
+import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
 import Image from 'next/image';
-
-const sortOptions = [
-  { id: 'all', label: 'All', icon: <LayoutGrid className="h-4 w-4" /> },
-  { id: 'youtube', label: 'YouTube', icon: <Image src={youtube_logo} alt="YouTube logo" width={20} height={20} /> },
-  { id: 'chzzk', label: 'Chzzk', icon: <Image src={chzzk_logo} alt="Chzzk logo" width={20} height={20} /> },
-];
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 export default function FeedTab({
   value,
@@ -19,28 +11,41 @@ export default function FeedTab({
   value: 'all' | 'youtube' | 'chzzk';
   onChange: (v: 'all' | 'youtube' | 'chzzk') => void;
 }) {
+  const platformOptions = [
+    { id: 'all', label: 'All', icon: null },
+    {
+      id: 'youtube',
+      label: 'YouTube',
+      icon: <Image src={youtube_icon} alt="YouTube logo" width={30} height={30} className="object-contain" />,
+    },
+    {
+      id: 'chzzk',
+      label: 'Chzzk',
+      icon: <Image src={chzzk_icon} alt="Chzzk logo" width={20} height={20} className="object-contain" />,
+    },
+  ];
+
   return (
-    <ToggleGroup
-      type="single"
-      value={value}
-      onValueChange={(v) => {
-        if (v) onChange(v as 'all' | 'youtube' | 'chzzk');
-      }}
-      className="flex flex-wrap gap-3"
-    >
-      {sortOptions.map((option) => {
-        return (
+    <div>
+      <ToggleGroup
+        type="single"
+        value={value}
+        onValueChange={(v) => {
+          if (v) onChange(v as 'all' | 'youtube' | 'chzzk');
+        }}
+        className="flex flex-wrap gap-3"
+      >
+        {platformOptions.map((option) => (
           <ToggleGroupItem
             key={option.id}
             value={option.id}
-            aria-label={`Toggle ${option.label}`}
-            className="w-[180px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-full"
+            className="flex flex-shrink-0 items-center justify-center gap-2 px-4 py-2 min-w-[120px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-md border"
           >
-            {option.icon}
+            {option.icon ?? null}
             {option.label}
           </ToggleGroupItem>
-        );
-      })}
-    </ToggleGroup>
+        ))}
+      </ToggleGroup>
+    </div>
   );
 }

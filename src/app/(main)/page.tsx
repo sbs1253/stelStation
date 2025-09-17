@@ -12,7 +12,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   const sort = typeof sp.sort === 'string' ? sp.sort : 'published';
   const limit = typeof sp.limit === 'string' ? sp.limit : '24';
   const platform = typeof sp.platform === 'string' ? sp.platform : 'all';
-  const filter = typeof sp.filter === 'string' ? sp.filter : 'video';
+  const filterType = typeof sp.filterType === 'string' ? sp.filterType : 'all';
 
   // 배포/프록시 환경에서 안전하게 호스트를 가져오기
   const host = (await headers()).get('host');
@@ -22,7 +22,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
   url.searchParams.set('sort', sort);
   url.searchParams.set('limit', limit);
   url.searchParams.set('platform', platform);
-  url.searchParams.set('filter', filter);
+  url.searchParams.set('filterType', filterType);
 
   const res = await fetch(url.toString(), { next: { revalidate } });
   if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
@@ -35,7 +35,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
       initialCursor={data.cursor}
       initialSort={sort as 'published' | 'views_day' | 'views_week'}
       initialPlatform={platform as 'all' | 'youtube' | 'chzzk'}
-      initialFilterType={filter as 'all' | 'video' | 'short' | 'live' | 'vod'}
+      initialFilterType={filterType as 'all' | 'video' | 'short' | 'live' | 'vod'}
     />
   );
 }
