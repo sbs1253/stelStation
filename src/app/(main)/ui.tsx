@@ -11,8 +11,6 @@ import { formatDuration } from '@/lib/time/duration';
 import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
 import youtube_icon from '@/assets/icons/youtube_Icon.png';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import ContentTypeFilter from '@/app/(main)/_component/filters/contentTypeFilter';
-import SortFilter from '@/app/(main)/_component/filters/sortFilter';
 import ResponsiveFilter from '@/app/(main)/_component/filters/responsiveFilter';
 
 type FeedItem = {
@@ -49,7 +47,7 @@ type Props = {
   initialHasMore: boolean;
   initialCursor: string | null;
   initialSort: 'published' | 'views_day' | 'views_week';
-  initialFilterType: 'all' | 'video' | 'short' | 'live' | 'vod';
+  initialFilterType: 'all' | 'video' | 'short' | 'vod';
   initialPlatform: 'all' | 'youtube' | 'chzzk';
 };
 
@@ -64,7 +62,7 @@ export default function Ui({
   const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>(initialPlatform);
   const [sort, setSort] = useState<'published' | 'views_day' | 'views_week'>(initialSort);
-  const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'live' | 'vod'>(initialFilterType);
+  const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'vod'>(initialFilterType);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
   const router = useRouter();
@@ -95,7 +93,7 @@ export default function Ui({
   useEffect(() => {
     const urlPlatform = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
     const urlSort = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    const urlFilter = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
+    const urlFilter = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'vod';
     if (urlSort !== sort) {
       setSort(urlSort);
     }
@@ -111,7 +109,7 @@ export default function Ui({
   useEffect(() => {
     const platformInUrl = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
     const sortInUrl = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    const filterInUrl = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
+    const filterInUrl = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'vod';
     if (platformInUrl === platform && sortInUrl === sort && filterInUrl === filterType) return;
     console.log(filterInUrl);
     const sp = new URLSearchParams(searchParams.toString());
@@ -133,62 +131,79 @@ export default function Ui({
     router.replace(`${pathname}?${sp.toString()}`);
   }, [platform, sort, filterType, pathname, router, searchParams]);
 
-  // async function fetchMore() {
-  //   if (loadingRef.current) return;
-  //   if (!hasMore || !cursor) return;
-  //   loadingRef.current = true;
+  // 플랫폼 변경 시 필터 호환성 처리
+  useEffect(() => {
+    if (platform === 'chzzk') {
+      if (filterType !== 'vod') {
+        setFilterType('vod');
+      }
+    } else if (platform === 'youtube') {
+      if (filterType === 'vod') {
+        setFilterType('all');
+      }
+    } else if (platform === 'all') {
+      if (filterType !== 'all') {
+        setFilterType('all');
+      }
+    }
+  }, [platform, filterType]);
 
-  //   // 요청 시점의 조건 스냅샷 (플랫폼|정렬)
-  //   const requestedKey = paramsKeyRef.current;
+  async function fetchMore() {
+    if (loadingRef.current) return;
+    if (!hasMore || !cursor) return;
+    loadingRef.current = true;
 
-  //   try {
-  //     const sp = new URLSearchParams(searchParams.toString());
-  //     sp.set('cursor', cursor);
-  //     const url = `/api/feed?${sp.toString()}`;
+    // 요청 시점의 조건 스냅샷 (플랫폼|정렬)
+    const requestedKey = paramsKeyRef.current;
 
-  //     const res = await fetch(url, { cache: 'no-store' });
-  //     if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
-  //     const data = await res.json();
+    try {
+      const sp = new URLSearchParams(searchParams.toString());
+      sp.set('cursor', cursor);
+      const url = `/api/feed?${sp.toString()}`;
 
-  //     // 요청 중에 플랫폼/정렬이 바뀌었으면(=스테일 응답) 폐기
-  //     if (paramsKeyRef.current !== requestedKey) return;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
+      const data = await res.json();
 
-  //     // 중복 아이템 제거
-  //     const newItems: FeedItem[] = (data.items || []).filter((item: FeedItem) => {
-  //       if (seenIdsRef.current.has(item.videoId)) return false;
-  //       seenIdsRef.current.add(item.videoId);
-  //       return true;
-  //     });
+      // 요청 중에 플랫폼/정렬이 바뀌었으면(=스테일 응답) 폐기
+      if (paramsKeyRef.current !== requestedKey) return;
 
-  //     setItems((prev) => [...prev, ...newItems]);
-  //     setCursor(data.cursor ?? null);
-  //     setHasMore(!!data.hasMore);
-  //   } catch (e) {
-  //     console.error('Feed fetch failed', e);
-  //   } finally {
-  //     loadingRef.current = false;
-  //   }
-  // }
+      // 중복 아이템 제거
+      const newItems: FeedItem[] = (data.items || []).filter((item: FeedItem) => {
+        if (seenIdsRef.current.has(item.videoId)) return false;
+        seenIdsRef.current.add(item.videoId);
+        return true;
+      });
 
-  // useEffect(() => {
-  //   const el = sentinelRef.current;
-  //   if (!el) return;
+      setItems((prev) => [...prev, ...newItems]);
+      setCursor(data.cursor ?? null);
+      setHasMore(!!data.hasMore);
+    } catch (e) {
+      console.error('Feed fetch failed', e);
+    } finally {
+      loadingRef.current = false;
+    }
+  }
 
-  //   const observer = new IntersectionObserver(
-  //     (entries) => {
-  //       const ent = entries[0];
-  //       if (ent.isIntersecting) fetchMore();
-  //     },
-  //     {
-  //       root: null,
-  //       rootMargin: '100px 0px',
-  //       threshold: 0,
-  //     }
-  //   );
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
 
-  //   observer.observe(el);
-  //   return () => observer.disconnect();
-  // }, [cursor, hasMore, searchParams]);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const ent = entries[0];
+        if (ent.isIntersecting) fetchMore();
+      },
+      {
+        root: null,
+        rootMargin: '100px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [cursor, hasMore, searchParams]);
 
   return (
     <div className="flex w-full h-screen">
@@ -203,6 +218,7 @@ export default function Ui({
                 onSortFilterChange={setSort}
                 videoType={filterType}
                 onVideoTypeChange={setFilterType}
+                platform={platform}
               />
             </div>
           </div>
@@ -231,14 +247,14 @@ function VideoCard({ item }: { item: FeedItem }) {
   return (
     <div className="flex flex-col overflow-hidden">
       <Link href={item.url} className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200">
-        {/* <Image
+        <Image
           src={item.thumb || ''}
           alt={item.title}
           fill
           sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
           // 👈 group-hover를 사용해 부모 Link에 호버 시 이미지 확대
           className="object-cover transition-transform duration-300 group-hover:scale-105"
-        /> */}
+        />
         {item.platform === 'youtube' ? (
           <div className="absolute top-2 right-2 group-hover:scale-105">
             <Image src={youtube_icon} alt="유튜브 아이콘" width={24} height={24} />
@@ -256,7 +272,7 @@ function VideoCard({ item }: { item: FeedItem }) {
       <div className="flex gap-3 pt-3">
         <Link href={item.channel.url}>
           <Avatar className="size-10">
-            {/* <AvatarImage className="object-cover" src={item.channel.thumb || ''} /> */}
+            <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
             <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
           </Avatar>
         </Link>

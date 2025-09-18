@@ -10,25 +10,36 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, Play, Film, Tv, Camera } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
-type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
-const VIDEO_TYPE: Array<{ label: string; value: ContentFilterType; icon: React.ElementType }> = [
-  { label: '전체', value: 'all', icon: Play },
-  { label: '동영상', value: 'video', icon: Film },
-  { label: '쇼츠', value: 'short', icon: Camera },
-  { label: '라이브', value: 'live', icon: Tv },
-  { label: '다시보기', value: 'vod', icon: Film },
-];
+type ContentFilterType = 'all' | 'video' | 'short' | 'vod';
+// --- 데이터 정의 (위에서 설명한 구조) ---
+const CONTENT_TYPE_DEFINITIONS = {
+  all: { label: '전체', value: 'all', icon: Play },
+  video: { label: '동영상', value: 'video', icon: Film },
+  short: { label: '쇼츠', value: 'short', icon: Camera },
+  vod: { label: '다시보기', value: 'vod', icon: Tv },
+};
+
+const PLATFORM_CONTENT_TYPES = {
+  all: ['all', 'video', 'short', 'vod'],
+  youtube: ['all', 'video', 'short'],
+  chzzk: ['vod'],
+};
 
 export default function ContentTypeFilter({
   value,
   onChange,
   isMobile,
+  platform,
 }: {
   value: ContentFilterType;
   onChange: (v: ContentFilterType) => void;
   isMobile?: boolean;
+  platform: 'chzzk' | 'youtube' | 'all';
 }) {
-  const selectedVideoType = VIDEO_TYPE.find((type) => type.value === value);
+  const isChzzk = platform === 'chzzk';
+  const videoTypeKeys = PLATFORM_CONTENT_TYPES[platform];
+  const videoTypes = videoTypeKeys.map((key) => CONTENT_TYPE_DEFINITIONS[key as ContentFilterType]);
+  const selectedVideoType = videoTypes.find((type) => type.value === value);
   const SelectedVideoTypeIcon = selectedVideoType?.icon;
 
   if (isMobile) {
@@ -41,7 +52,7 @@ export default function ContentTypeFilter({
         }}
         className="flex flex-wrap gap-3"
       >
-        {VIDEO_TYPE.map((option) => (
+        {videoTypes.map((option) => (
           <ToggleGroupItem
             key={option.value}
             value={option.value}
@@ -54,7 +65,15 @@ export default function ContentTypeFilter({
       </ToggleGroup>
     );
   }
-  return (
+  return isChzzk ? (
+    <Button
+      variant="ghost"
+      className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm rounded-full flex items-center gap-2 px-4 py-2.5 font-medium"
+    >
+      {SelectedVideoTypeIcon && <SelectedVideoTypeIcon className="w-4 h-4" />}
+      {selectedVideoType?.label}
+    </Button>
+  ) : (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
@@ -73,7 +92,7 @@ export default function ContentTypeFilter({
             if (value) onChange(value as ContentFilterType);
           }}
         >
-          {VIDEO_TYPE.map((type) => {
+          {videoTypes.map((type) => {
             const Icon = type.icon;
             return (
               <DropdownMenuRadioItem key={type.value} value={type.value} className="gap-2">

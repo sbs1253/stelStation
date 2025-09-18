@@ -19,19 +19,21 @@ import { Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
-type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
+type ContentFilterType = 'all' | 'video' | 'short' | 'vod';
 type SortFilterType = 'published' | 'views_day' | 'views_week';
-
+type PlatformType = 'all' | 'youtube' | 'chzzk';
 export default function ResponsiveFilter({
   sortFilter,
   onSortFilterChange,
   videoType,
   onVideoTypeChange,
+  platform,
 }: {
   sortFilter: SortFilterType;
   onSortFilterChange: (v: SortFilterType) => void;
   videoType: ContentFilterType;
   onVideoTypeChange: (v: ContentFilterType) => void;
+  platform: PlatformType;
 }) {
   const isMobile = useIsMobile();
   const [tempSortFilter, setTempSortFilter] = useState(sortFilter);
@@ -97,7 +99,12 @@ export default function ResponsiveFilter({
                   <div>
                     <h3 className="text-base font-medium mb-4">콘텐츠 타입</h3>
                     <div className="space-y-2">
-                      <ContentTypeFilter value={tempVideoType} onChange={setTempVideoType} isMobile />
+                      <ContentTypeFilter
+                        value={tempVideoType}
+                        onChange={setTempVideoType}
+                        platform={platform}
+                        isMobile
+                      />
                     </div>
                   </div>
                 </div>
@@ -127,9 +134,10 @@ export default function ResponsiveFilter({
         <div className="flex flex-wrap items-center gap-4">
           <SortFilter value={sortFilter} onChange={onSortFilterChange} />
 
-          <Separator orientation="vertical" className="h-6" />
-
-          <ContentTypeFilter value={videoType} onChange={onVideoTypeChange} />
+          <>
+            <Separator orientation="vertical" className="h-6" />
+            <ContentTypeFilter value={videoType} onChange={onVideoTypeChange} platform={platform} />
+          </>
         </div>
       )}
     </div>
