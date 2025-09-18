@@ -1,6 +1,6 @@
 'use client';
 
-import FeedTab from '@/app/(main)/_component/feedTab';
+import PlatformFilter from '@/app/(main)/_component/filters/PlatformFilter';
 import SideBar from '@/app/(main)/_component/sideBar';
 import { formatKSTDate } from '@/lib/time/kst';
 import Link from 'next/link';
@@ -11,8 +11,9 @@ import { formatDuration } from '@/lib/time/duration';
 import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
 import youtube_icon from '@/assets/icons/youtube_Icon.png';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import ContentTypeFilter from '@/app/(main)/_component/contentTypeFilter';
-import SortFilter from '@/app/(main)/_component/sortFilter';
+import ContentTypeFilter from '@/app/(main)/_component/filters/contentTypeFilter';
+import SortFilter from '@/app/(main)/_component/filters/sortFilter';
+import ResponsiveFilter from '@/app/(main)/_component/filters/responsiveFilter';
 
 type FeedItem = {
   videoId: string;
@@ -194,11 +195,15 @@ export default function Ui({
       <SideBar />
       <main className="flex-1 overflow-y-auto">
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b">
-          <div className="flex justify-between items-center">
-            <FeedTab value={platform} onChange={setPlatform} />
+          <div className="flex flex-wrap justify-between items-center gap-4">
+            <PlatformFilter value={platform} onChange={setPlatform} />
             <div className="flex gap-2">
-              <SortFilter value={sort} onChange={setSort} />
-              <ContentTypeFilter value={filterType} onChange={setFilterType} />
+              <ResponsiveFilter
+                sortFilter={sort}
+                onSortFilterChange={setSort}
+                videoType={filterType}
+                onVideoTypeChange={setFilterType}
+              />
             </div>
           </div>
         </div>
@@ -226,14 +231,14 @@ function VideoCard({ item }: { item: FeedItem }) {
   return (
     <div className="flex flex-col overflow-hidden">
       <Link href={item.url} className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200">
-        <Image
+        {/* <Image
           src={item.thumb || ''}
           alt={item.title}
           fill
           sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
           // 👈 group-hover를 사용해 부모 Link에 호버 시 이미지 확대
           className="object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+        /> */}
         {item.platform === 'youtube' ? (
           <div className="absolute top-2 right-2 group-hover:scale-105">
             <Image src={youtube_icon} alt="유튜브 아이콘" width={24} height={24} />
@@ -251,7 +256,7 @@ function VideoCard({ item }: { item: FeedItem }) {
       <div className="flex gap-3 pt-3">
         <Link href={item.channel.url}>
           <Avatar className="size-10">
-            <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
+            {/* <AvatarImage className="object-cover" src={item.channel.thumb || ''} /> */}
             <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
           </Avatar>
         </Link>
