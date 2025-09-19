@@ -19,7 +19,7 @@ import { Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
-type ContentFilterType = 'all' | 'video' | 'short' | 'vod';
+type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
 type SortFilterType = 'published' | 'views_day' | 'views_week';
 type PlatformType = 'all' | 'youtube' | 'chzzk';
 export default function ResponsiveFilter({

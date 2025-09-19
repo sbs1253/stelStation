@@ -12,13 +12,14 @@ import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
 import youtube_icon from '@/assets/icons/youtube_Icon.png';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import ResponsiveFilter from '@/app/(main)/_component/filters/responsiveFilter';
-
+type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
+type PlatformType = 'all' | 'youtube' | 'chzzk';
 type FeedItem = {
   videoId: string;
-  platform: 'youtube' | 'chzzk';
+  platform: PlatformType;
   channel: {
     id: string;
-    platform: 'youtube' | 'chzzk';
+    platform: PlatformType;
     platformChannelId: string;
     title: string;
     thumb: string | null;
@@ -30,15 +31,9 @@ type FeedItem = {
   publishedAt: string | null;
   durationSec: number | null;
   isLive: boolean;
-  contentType: 'video' | 'short' | 'live' | 'vod';
-  stats?: {
-    views?: number | null;
-    likes?: number | null;
-  };
-  live?: {
-    isLiveNow: boolean;
-    hadLive24h: boolean;
-  };
+  contentType: ContentFilterType;
+  stats?: { views?: number | null };
+  live?: { isLiveNow: boolean; hadLive24h: boolean };
   url: string;
 };
 
@@ -47,8 +42,8 @@ type Props = {
   initialHasMore: boolean;
   initialCursor: string | null;
   initialSort: 'published' | 'views_day' | 'views_week';
-  initialFilterType: 'all' | 'video' | 'short' | 'vod';
-  initialPlatform: 'all' | 'youtube' | 'chzzk';
+  initialFilterType: ContentFilterType;
+  initialPlatform: PlatformType;
 };
 
 export default function Ui({
@@ -62,13 +57,18 @@ export default function Ui({
   const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>(initialPlatform);
   const [sort, setSort] = useState<'published' | 'views_day' | 'views_week'>(initialSort);
-  const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'vod'>(initialFilterType);
+  const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'live' | 'vod'>(initialFilterType);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const PLATFORM_CONTENT_TYPES = {
+    all: ['all', 'video', 'short', 'vod', 'live'],
+    youtube: ['all', 'video', 'short'],
+    chzzk: ['all', 'vod', 'live'],
+  };
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   // 중복 호출 가드 (fetch 중엔 또 부르지 않게)
   const loadingRef = useRef(false);
@@ -93,7 +93,7 @@ export default function Ui({
   useEffect(() => {
     const urlPlatform = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
     const urlSort = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    const urlFilter = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'vod';
+    const urlFilter = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
     if (urlSort !== sort) {
       setSort(urlSort);
     }
@@ -109,9 +109,8 @@ export default function Ui({
   useEffect(() => {
     const platformInUrl = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
     const sortInUrl = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    const filterInUrl = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'vod';
+    const filterInUrl = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
     if (platformInUrl === platform && sortInUrl === sort && filterInUrl === filterType) return;
-    console.log(filterInUrl);
     const sp = new URLSearchParams(searchParams.toString());
     if (sort === 'published') {
       sp.delete('sort');
@@ -133,18 +132,10 @@ export default function Ui({
 
   // 플랫폼 변경 시 필터 호환성 처리
   useEffect(() => {
-    if (platform === 'chzzk') {
-      if (filterType !== 'vod') {
-        setFilterType('vod');
-      }
-    } else if (platform === 'youtube') {
-      if (filterType === 'vod') {
-        setFilterType('all');
-      }
-    } else if (platform === 'all') {
-      if (filterType !== 'all') {
-        setFilterType('all');
-      }
+    const contentTypes = PLATFORM_CONTENT_TYPES[platform];
+    // 현재 필터가 새 플랫폼에서 유효하지 않다면, 'all'으로 초기화
+    if (!contentTypes.includes(filterType)) {
+      setFilterType('all');
     }
   }, [platform, filterType]);
 
@@ -242,13 +233,21 @@ export default function Ui({
   );
 }
 
-// 1. VideoCard를 별도의 컴포넌트로 분리하여 가독성과 재사용성 향상 -> 추후 파일 분리 예정
+// 추후 파일 분리 예정
 function VideoCard({ item }: { item: FeedItem }) {
+  const getThumbnailUrl = (thumb: string) => {
+    if (thumb.includes('{type}')) {
+      return thumb.replace('{type}', '720');
+    }
+    return thumb;
+  };
+
+  const thumbnailUrl = getThumbnailUrl(item.thumb ?? '');
   return (
     <div className="flex flex-col overflow-hidden">
       <Link href={item.url} className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200">
         <Image
-          src={item.thumb || ''}
+          src={thumbnailUrl}
           alt={item.title}
           fill
           sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"

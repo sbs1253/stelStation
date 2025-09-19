@@ -35,7 +35,7 @@ export default async function Home({ searchParams }: { searchParams: SP }) {
       initialCursor={data.cursor}
       initialSort={sort as 'published' | 'views_day' | 'views_week'}
       initialPlatform={platform as 'all' | 'youtube' | 'chzzk'}
-      initialFilterType={filterType as 'all' | 'video' | 'short' | 'vod'}
+      initialFilterType={filterType as 'all' | 'video' | 'short' | 'live' | 'vod'}
     />
   );
 }

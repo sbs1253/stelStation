@@ -7,22 +7,22 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Play, Film, Tv, Camera } from 'lucide-react';
+import { ChevronDown, Play, Film, Tv, Camera, Podcast } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
-type ContentFilterType = 'all' | 'video' | 'short' | 'vod';
-// --- 데이터 정의 (위에서 설명한 구조) ---
+type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
 const CONTENT_TYPE_DEFINITIONS = {
   all: { label: '전체', value: 'all', icon: Play },
   video: { label: '동영상', value: 'video', icon: Film },
   short: { label: '쇼츠', value: 'short', icon: Camera },
   vod: { label: '다시보기', value: 'vod', icon: Tv },
+  live: { label: '라이브', value: 'live', icon: Podcast },
 };
 
 const PLATFORM_CONTENT_TYPES = {
-  all: ['all', 'video', 'short', 'vod'],
+  all: ['all', 'video', 'short', 'vod', 'live'],
   youtube: ['all', 'video', 'short'],
-  chzzk: ['vod'],
+  chzzk: ['all', 'vod', 'live'],
 };
 
 export default function ContentTypeFilter({
@@ -36,9 +36,9 @@ export default function ContentTypeFilter({
   isMobile?: boolean;
   platform: 'chzzk' | 'youtube' | 'all';
 }) {
-  const isChzzk = platform === 'chzzk';
   const videoTypeKeys = PLATFORM_CONTENT_TYPES[platform];
   const videoTypes = videoTypeKeys.map((key) => CONTENT_TYPE_DEFINITIONS[key as ContentFilterType]);
+
   const selectedVideoType = videoTypes.find((type) => type.value === value);
   const SelectedVideoTypeIcon = selectedVideoType?.icon;
 
@@ -65,15 +65,7 @@ export default function ContentTypeFilter({
       </ToggleGroup>
     );
   }
-  return isChzzk ? (
-    <Button
-      variant="ghost"
-      className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm rounded-full flex items-center gap-2 px-4 py-2.5 font-medium"
-    >
-      {SelectedVideoTypeIcon && <SelectedVideoTypeIcon className="w-4 h-4" />}
-      {selectedVideoType?.label}
-    </Button>
-  ) : (
+  return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
