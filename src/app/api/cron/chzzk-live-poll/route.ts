@@ -137,6 +137,7 @@ export async function POST(request: Request) {
         p_live_start_time: d?.openDate ?? null, // "yyyy-MM-dd HH:mm:ss" (KST)
         p_chat_channel_id: d?.chatChannelId ?? null,
         p_adult: d?.adult ?? null,
+        p_live_close_time: d?.closeDate ?? null,
       });
 
       if (liveRpcErr) {
