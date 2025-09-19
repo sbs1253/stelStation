@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Header from '@/components/layout/hearder';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -6,8 +7,9 @@ interface MainLayoutProps {
 
 export default function MainLayout({ children }: MainLayoutProps) {
   return (
-    <html lang="ko">
-      <body className="min-h-screen bg-background text-foreground">{children}</body>
-    </html>
+    <div className="w-full bg-background text-foreground">
+      <Header />
+      {children}
+    </div>
   );
 }

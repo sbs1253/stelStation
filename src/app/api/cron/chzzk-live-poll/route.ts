@@ -93,32 +93,88 @@ export async function POST(request: Request) {
   let updated = 0;
   const failReasons: Record<string, number> = {};
   const sampleErrors: Array<{ channelId: string; details: string }> = [];
-  const channelResults: Array<{ channelId: string; wasLive?: boolean; isLiveNow?: boolean; result: 'ok' | 'fail' }> =
-    [];
+  const channelResults: Array<{
+    channelId: string;
+    wasLive?: boolean;
+    isLiveNow?: boolean;
+    result: 'ok' | 'fail';
+    sessionAction?: string;
+    sessionId?: string | null;
+    liveDetail?: {
+      liveId: number;
+      title: string;
+      viewerCount: number | null;
+      category: string | null;
+      thumbnail: string | null;
+    };
+  }> = [];
 
   async function pollOne(ch: ChzzkChannelRow) {
     attempted++;
     try {
       const live = await getChzzkLiveStatus(ch.platform_channel_id);
-      const isLiveNow = !!live?.openLive;
+      if (!live) {
+        const key = 'live-detail:fetch-failed';
+        failReasons[key] = (failReasons[key] ?? 0) + 1;
+        if (sampleErrors.length < 5) sampleErrors.push({ channelId: ch.id, details: key });
+        if (verbose) channelResults.push({ channelId: ch.id, wasLive: !!ch.is_live_now, result: 'fail' });
+        return;
+      }
 
-      // 라이브 상태 원자 반영(RPC 내에서 상태 전이/타임스탬프 처리)
-      const { error: liveRpcErr } = await supabaseService.rpc('rpc_channels_apply_live_state', {
+      const isLiveNow = !!live.openLive;
+      const d = live.liveDetail;
+
+      // 통합 세션/상태 반영 RPC - 개선된 파라미터 전달
+      const { data: rpcResult, error: liveRpcErr } = await supabaseService.rpc('rpc_channels_manage_live_session', {
         p_channel_id: ch.id,
         p_is_live_now: isLiveNow,
         p_now: new Date().toISOString(),
+        p_live_id: d?.liveId ?? null,
+        p_live_title: d?.liveTitle ?? null,
+        p_live_thumbnail: d?.liveImageUrl ?? null,
+        p_viewer_count: d?.concurrentUserCount ?? null,
+        p_category: d?.categoryType ?? null,
+        p_live_start_time: d?.openDate ?? null, // "yyyy-MM-dd HH:mm:ss" (KST)
+        p_chat_channel_id: d?.chatChannelId ?? null,
+        p_adult: d?.adult ?? null,
       });
 
       if (liveRpcErr) {
-        const key = liveRpcErr.message ?? 'rpc_channels_apply_live_state';
+        const key = liveRpcErr.message ?? 'rpc_channels_manage_live_session';
         failReasons[key] = (failReasons[key] ?? 0) + 1;
         if (sampleErrors.length < 5) sampleErrors.push({ channelId: ch.id, details: key });
-        if (verbose) channelResults.push({ channelId: ch.id, wasLive: !!ch.is_live_now, isLiveNow, result: 'fail' });
+        if (verbose) {
+          channelResults.push({
+            channelId: ch.id,
+            wasLive: !!ch.is_live_now,
+            isLiveNow,
+            result: 'fail',
+            sessionAction: 'rpc_error',
+          });
+        }
         return;
       }
 
       updated++;
-      if (verbose) channelResults.push({ channelId: ch.id, wasLive: !!ch.is_live_now, isLiveNow, result: 'ok' });
+      if (verbose) {
+        channelResults.push({
+          channelId: ch.id,
+          wasLive: rpcResult?.was_live || false,
+          isLiveNow,
+          result: 'ok',
+          sessionAction: rpcResult?.session_action || 'none',
+          sessionId: rpcResult?.session_id || null,
+          liveDetail: d
+            ? {
+                liveId: d.liveId,
+                title: d.liveTitle,
+                viewerCount: d.concurrentUserCount,
+                category: d.categoryType,
+                thumbnail: d.liveImageUrl,
+              }
+            : undefined,
+        });
+      }
     } catch (e: any) {
       const key = String(e?.message ?? e);
       failReasons[key] = (failReasons[key] ?? 0) + 1;

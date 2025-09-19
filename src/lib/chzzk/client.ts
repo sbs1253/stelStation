@@ -129,23 +129,79 @@ export async function getChzzkChannelMeta(channelId: string): Promise<ChzzkOpenC
   return map.get(channelId) ?? null;
 }
 
-/** (Service API) 채널 상세 정보 및 라이브 상태 조회 */
-export async function getChzzkLiveStatus(channelId: string): Promise<ChzzkServiceChannel | null> {
-  const url = `${SERVICE_API_BASE_URL}/service/v1/channels/${encodeURIComponent(channelId)}`;
+/** (Service API v2) 채널 라이브 디테일 조회 */
+type ChzzkLiveDetail = {
+  liveId: number;
+  liveTitle: string;
+  status: 'OPEN' | 'CLOSE';
+  liveImageUrl: string | null;
+  defaultThumbnailImageUrl: string | null;
+  concurrentUserCount: number | null;
+  openDate: string; // "yyyy-MM-dd HH:mm:ss"
+  closeDate: string | null;
+  adult: boolean | null;
+  chatChannelId: string | null;
+  categoryType: string | null;
+  liveCategory?: string | null;
+};
 
-  const { ok, status, body } = await fetchJsonWithTimeout<ChzzkServiceChannelResponse>(url, {
+type ChzzkLiveDetailResponse = {
+  code: number;
+  message: string | null;
+  content?: ChzzkLiveDetail | null;
+};
+
+export async function getChzzkLiveStatus(channelId: string): Promise<{
+  openLive: boolean;
+  liveDetail?: {
+    liveId: number;
+    liveTitle: string;
+    liveImageUrl: string | null;
+    concurrentUserCount: number | null;
+    categoryType: string | null;
+    openDate: string; // original KST string "yyyy-MM-dd HH:mm:ss"
+    closeDate: string | null;
+    status: 'OPEN' | 'CLOSE';
+    adult: boolean | null;
+    chatChannelId: string | null;
+  };
+} | null> {
+  const url = `${SERVICE_API_BASE_URL}/service/v2/channels/${encodeURIComponent(channelId)}/live-detail`;
+
+  const { ok, status, body } = await fetchJsonWithTimeout<ChzzkLiveDetailResponse>(url, {
     'Content-Type': 'application/json',
     'User-Agent':
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36',
   });
 
   if (!ok) {
-    console.error(`Chzzk Service API (live-status) error ${status}`, body);
+    console.error(`Chzzk Service API (live-detail) error ${status}`, body);
     return null;
   }
 
-  // 응답 content 전체를 반환하여 호출하는 쪽에서 모든 정보를 활용할 수 있게 합니다.
-  return body?.content ?? null;
+  const content = body?.content ?? null;
+  if (!content) {
+    return { openLive: false };
+  }
+
+  const isLive = content.status === 'OPEN';
+  return {
+    openLive: isLive,
+    liveDetail: isLive
+      ? {
+          liveId: content.liveId,
+          liveTitle: content.liveTitle,
+          liveImageUrl: content.liveImageUrl || content.defaultThumbnailImageUrl || null,
+          concurrentUserCount: content.concurrentUserCount ?? null,
+          categoryType: content.categoryType ?? content.liveCategory ?? null,
+          openDate: content.openDate,
+          closeDate: content.closeDate,
+          status: content.status,
+          adult: content.adult ?? null,
+          chatChannelId: content.chatChannelId ?? null,
+        }
+      : undefined,
+  };
 }
 
 /** (Service API) 채널 VOD 목록 1페이지 */

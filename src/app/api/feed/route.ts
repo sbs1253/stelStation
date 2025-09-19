@@ -4,7 +4,7 @@ import { parseFeedQueryFromURL } from '@/lib/validations/feed';
 import { encodeCursor, decodeCursor } from '@/lib/paging/cursor';
 import { mapPublishedRowToItem, mapRankingRowToItem } from '@/lib/feed/transform';
 import { createSupabaseServer } from '@/lib/supabase/server';
-import { makeChannelUrl } from '@/lib/links';
+import { makeChannelUrl, makeLiveUrl } from '@/lib/links';
 
 type PublishedCursorState = { mode: 'cache'; pivot: string | null };
 
@@ -92,6 +92,65 @@ export async function GET(request: Request) {
 
   if (!channelIds.length) {
     return NextResponse.json({ items: [], hasMore: false, cursor: null });
+  }
+
+  // 4) LIVE 전용 분기: filterType=live 이면 현재 진행 중인 라이브 세션만 반환
+  if (query.filterType === 'live') {
+    type LiveCursor = { startedAt: string; channelId: string };
+    const pivot = query.cursor ? decodeCursor<LiveCursor>(query.cursor) : null;
+
+    const { data, error } = await supabase.rpc('rpc_feed_live_now_page', {
+      p_channel_ids: channelIds,
+      p_pivot: pivot ? { started_at: pivot.startedAt, channel_id: pivot.channelId } : null,
+      p_limit: query.limit,
+    });
+
+    // 에러거나 rows 비어도 빈 배열 반환 (fallback 없음)
+    if (error) {
+      console.error('[feed] rpc_feed_live_now_page error', error);
+      return NextResponse.json({ items: [], hasMore: false, cursor: null });
+    }
+
+    const rows: any[] = data?.rows ?? [];
+    if (!rows.length) {
+      return NextResponse.json({ items: [], hasMore: false, cursor: null });
+    }
+
+    // 채널 메타(썸네일/타이틀 등) 주입을 위해 채널 정보 로드
+    const rowChannelIds = Array.from(new Set(rows.map((r) => r.channel_id)));
+    const channelMap = await loadChannelMap(supabase, rowChannelIds);
+
+    const items = rows.map((r) => {
+      const ch = channelMap[r.channel_id]; // 선택적 (없어도 동작)
+      const base = {
+        videoId: r.live_id ? `live:${r.channel_id}:${r.live_id}` : `live:${r.channel_id}:now`,
+        platform: (ch?.platform ?? r.platform ?? 'chzzk') as 'youtube' | 'chzzk',
+        title: r.title, // RPC에서 이미 coalesce 처리됨
+        thumb: r.thumbnail_url ?? ch?.thumb ?? null,
+        publishedAt: r.started_at ?? null,
+        durationSec: null,
+        isLive: true,
+        contentType: 'live' as const,
+        // viewer_count는 현재 시청자 수로 stats.views에 태운다(프론트 UI 재사용)
+        stats: { views: typeof r.viewer_count === 'number' ? r.viewer_count : null, likes: null },
+        live: { isLiveNow: true, hadLive24h: true },
+        url:
+          ch?.platformChannelId ?? r.platform_channel_id
+            ? makeLiveUrl(ch?.platformChannelId ?? r.platform_channel_id)
+            : undefined,
+      };
+
+      return attachChannelMetaToItem(base, ch);
+    });
+
+    const nextPivot = data?.next_pivot ?? null;
+    const hasMore = !!data?.has_more;
+    const nextCursor =
+      hasMore && nextPivot
+        ? encodeCursor<LiveCursor>({ startedAt: nextPivot.started_at, channelId: nextPivot.channel_id })
+        : null;
+
+    return NextResponse.json({ items, hasMore, cursor: nextCursor });
   }
 
   // 4) 정렬 분기

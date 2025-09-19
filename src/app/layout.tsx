@@ -1,21 +1,17 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
-import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import Providers from '@/app/providers';
 import GaTracker from '@/app/ga-tracker';
 import { Suspense } from 'react';
+import localFont from 'next/font/local';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
+const pretendard = localFont({
+  src: '../fonts/pretendard/PretendardVariable.woff2',
+  display: 'swap',
+  weight: '100 900',
+  variable: '--font-pretendard',
 });
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
 export const metadata: Metadata = {
   title: 'stel station',
   description: 'Hello StelStation',
@@ -30,8 +26,8 @@ export default function RootLayout({
   const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
   const gaEnabled = process.env.NODE_ENV === 'production' && !!gaId && process.env.NEXT_PUBLIC_ENABLE_GA !== 'false';
   return (
-    <html lang="ko">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="ko" suppressHydrationWarning className={`${pretendard.variable} antialiased`}>
+      <body>
         <Providers>{children}</Providers>
 
         {/* Cloudflare Web Analytics (JS Beacon) */}
