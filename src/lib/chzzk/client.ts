@@ -160,7 +160,7 @@ export async function getChzzkLiveStatus(channelId: string): Promise<{
     concurrentUserCount: number | null;
     categoryType: string | null;
     openDate: string; // original KST string "yyyy-MM-dd HH:mm:ss"
-    closeDate: string | null;
+    closeDate: string | null; // 추가: 종료 시간
     status: 'OPEN' | 'CLOSE';
     adult: boolean | null;
     chatChannelId: string | null;
@@ -185,22 +185,22 @@ export async function getChzzkLiveStatus(channelId: string): Promise<{
   }
 
   const isLive = content.status === 'OPEN';
+
+  // 중요: 라이브가 아니어도 최근 방송 정보는 반환 (closeDate 포함)
   return {
     openLive: isLive,
-    liveDetail: isLive
-      ? {
-          liveId: content.liveId,
-          liveTitle: content.liveTitle,
-          liveImageUrl: content.liveImageUrl || content.defaultThumbnailImageUrl || null,
-          concurrentUserCount: content.concurrentUserCount ?? null,
-          categoryType: content.categoryType ?? content.liveCategory ?? null,
-          openDate: content.openDate,
-          closeDate: content.closeDate,
-          status: content.status,
-          adult: content.adult ?? null,
-          chatChannelId: content.chatChannelId ?? null,
-        }
-      : undefined,
+    liveDetail: {
+      liveId: content.liveId,
+      liveTitle: content.liveTitle,
+      liveImageUrl: content.liveImageUrl || content.defaultThumbnailImageUrl || null,
+      concurrentUserCount: content.concurrentUserCount ?? null,
+      categoryType: content.categoryType ?? content.liveCategory ?? null,
+      openDate: content.openDate,
+      closeDate: content.closeDate, // 추가: 종료 시간 포함
+      status: content.status,
+      adult: content.adult ?? null,
+      chatChannelId: content.chatChannelId ?? null,
+    },
   };
 }
 
