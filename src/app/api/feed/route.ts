@@ -96,61 +96,90 @@ export async function GET(request: Request) {
 
   // 4) LIVE 전용 분기: filterType=live 이면 현재 진행 중인 라이브 세션만 반환
   if (query.filterType === 'live') {
-    type LiveCursor = { startedAt: string; channelId: string };
+    if (platformParam === 'youtube') {
+      return NextResponse.json({ items: [], hasMore: false, cursor: null });
+    }
+    type LiveCursor = { liveStateUpdatedAt: string; channelId: string };
     const pivot = query.cursor ? decodeCursor<LiveCursor>(query.cursor) : null;
 
-    const { data, error } = await supabase.rpc('rpc_feed_live_now_page', {
-      p_channel_ids: channelIds,
-      p_pivot: pivot ? { started_at: pivot.startedAt, channel_id: pivot.channelId } : null,
-      p_limit: query.limit,
-    });
+    // channels 테이블에서 직접 라이브 채널 조회
+    let liveQuery = supabase
+      .from('channels')
+      .select('*')
+      .eq('platform', 'chzzk')
+      .eq('is_live_now', true)
+      .in('id', channelIds)
+      .order('live_state_updated_at', { ascending: false })
+      .order('id', { ascending: false });
 
-    // 에러거나 rows 비어도 빈 배열 반환 (fallback 없음)
+    // 커서 기반 페이징
+    if (pivot) {
+      liveQuery = liveQuery.or(
+        `live_state_updated_at.lt.${pivot.liveStateUpdatedAt},and(live_state_updated_at.eq.${pivot.liveStateUpdatedAt},id.lt.${pivot.channelId})`
+      );
+    }
+
+    liveQuery = liveQuery.limit(query.limit + 1);
+
+    const { data: liveChannels, error } = await liveQuery;
+
     if (error) {
-      console.error('[feed] rpc_feed_live_now_page error', error);
+      console.error('[feed] live channels query error', error);
       return NextResponse.json({ items: [], hasMore: false, cursor: null });
     }
 
-    const rows: any[] = data?.rows ?? [];
-    if (!rows.length) {
+    const channels = liveChannels || [];
+    const hasMore = channels.length > query.limit;
+    const items = channels.slice(0, query.limit);
+
+    if (!items.length) {
       return NextResponse.json({ items: [], hasMore: false, cursor: null });
     }
 
-    // 채널 메타(썸네일/타이틀 등) 주입을 위해 채널 정보 로드
-    const rowChannelIds = Array.from(new Set(rows.map((r) => r.channel_id)));
-    const channelMap = await loadChannelMap(supabase, rowChannelIds);
-
-    const items = rows.map((r) => {
-      const ch = channelMap[r.channel_id]; // 선택적 (없어도 동작)
-      const base = {
-        videoId: r.live_id ? `live:${r.channel_id}:${r.live_id}` : `live:${r.channel_id}:now`,
-        platform: (ch?.platform ?? r.platform ?? 'chzzk') as 'youtube' | 'chzzk',
-        title: r.title, // RPC에서 이미 coalesce 처리됨
-        thumb: r.thumbnail_url ?? ch?.thumb ?? null,
-        publishedAt: r.started_at ?? null,
+    const formattedItems = items.map((ch: any) => {
+      return {
+        videoId: ch.current_live_id ? `live:${ch.id}:${ch.current_live_id}` : `live:${ch.id}:now`,
+        platform: ch.platform,
+        title: ch.current_live_title || (ch.title ? `${ch.title} — LIVE` : 'LIVE'),
+        thumb: ch.current_live_thumbnail || ch.thumbnail_url || null,
+        publishedAt: ch.last_live_started_at,
         durationSec: null,
         isLive: true,
         contentType: 'live' as const,
-        // viewer_count는 현재 시청자 수로 stats.views에 태운다(프론트 UI 재사용)
-        stats: { views: typeof r.viewer_count === 'number' ? r.viewer_count : null, likes: null },
+        stats: {
+          views: ch.current_live_viewer_count,
+          likes: null,
+        },
         live: { isLiveNow: true, hadLive24h: true },
-        url:
-          ch?.platformChannelId ?? r.platform_channel_id
-            ? makeLiveUrl(ch?.platformChannelId ?? r.platform_channel_id)
+        url: ch.platform_channel_id ? makeLiveUrl(ch.platform_channel_id) : undefined,
+        channel: {
+          id: ch.id,
+          platform: ch.platform,
+          platformChannelId: ch.platform_channel_id,
+          title: ch.title,
+          thumb: ch.thumbnail_url,
+          isLiveNow: ch.is_live_now,
+          url: ch.platform_channel_id
+            ? makeChannelUrl(ch.platform as 'youtube' | 'chzzk', ch.platform_channel_id)
             : undefined,
+        },
       };
-
-      return attachChannelMetaToItem(base, ch);
     });
 
-    const nextPivot = data?.next_pivot ?? null;
-    const hasMore = !!data?.has_more;
+    // 다음 커서 생성
     const nextCursor =
-      hasMore && nextPivot
-        ? encodeCursor<LiveCursor>({ startedAt: nextPivot.started_at, channelId: nextPivot.channel_id })
+      hasMore && items.length > 0
+        ? encodeCursor<LiveCursor>({
+            liveStateUpdatedAt: items[items.length - 1].live_state_updated_at,
+            channelId: items[items.length - 1].id,
+          })
         : null;
 
-    return NextResponse.json({ items, hasMore, cursor: nextCursor });
+    return NextResponse.json({
+      items: formattedItems,
+      hasMore,
+      cursor: nextCursor,
+    });
   }
 
   // 4) 정렬 분기

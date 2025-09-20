@@ -203,8 +203,6 @@ export async function POST(request: Request) {
         stats.upserted = upsertResult.data?.length ?? 0;
       }
     } else if (channelRecord.platform === 'chzzk') {
-      // ---------- CHZZK: 라이브 상태 + 메타 + (옵션)VOD 동기화 ----------
-
       // 1) 라이브 상태(실시간)
       const liveStatus = await getChzzkLiveStatus(channelRecord.platform_channel_id);
       const isLiveNow = !!liveStatus?.openLive;
@@ -225,11 +223,22 @@ export async function POST(request: Request) {
         }
       }
 
-      // 3) 라이브 상태 전이 기록(RPC)
-      const { error: liveStateRpcError } = await supabaseService.rpc('rpc_channels_apply_live_state', {
+      // 3) 라이브 상태 전이 기록
+      const d = liveStatus?.liveDetail;
+      const payload = {
+        liveId: d?.liveId != null ? String(d.liveId) : null,
+        title: d?.liveTitle ?? null,
+        thumbnail: d?.liveImageUrl ?? null,
+        concurrentUserCount: d?.concurrentUserCount ?? null,
+        category: d?.categoryType ?? null,
+        chatChannelId: d?.chatChannelId ?? null,
+        openDate: d?.openDate ?? null, // "yyyy-MM-dd HH:mm:ss" (KST 문자열)
+        closeDate: d?.closeDate ?? null, // 종료 시각 (있으면)
+      };
+      const { error: liveStateRpcError } = await supabaseService.rpc('rpc_update_channel_live_state', {
         p_channel_id: channelRecord.id,
         p_is_live_now: isLiveNow,
-        p_now: new Date().toISOString(), // 서버 now(UTC) 전달
+        p_live_data: payload,
       });
       if (liveStateRpcError) throw liveStateRpcError;
 
