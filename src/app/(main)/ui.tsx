@@ -4,7 +4,7 @@ import PlatformFilter from '@/app/(main)/_component/filters/PlatformFilter';
 import SideBar from '@/app/(main)/_component/sideBar';
 import { formatKSTFriendlyDate, formatKSTLiveTime } from '@/lib/time/kst';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDuration } from '@/lib/time/duration';
@@ -12,6 +12,11 @@ import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
 import youtube_icon from '@/assets/icons/youtube_Icon.png';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import ResponsiveFilter from '@/app/(main)/_component/filters/responsiveFilter';
+
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInView } from 'react-intersection-observer';
+import { useMemo } from 'react';
+
 type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
 type PlatformType = 'all' | 'youtube' | 'chzzk';
 type FeedItem = {
@@ -47,19 +52,16 @@ type Props = {
 };
 
 export default function Ui({
-  initialItems,
-  initialHasMore,
-  initialCursor,
+  initialItems: _initialItems,
+  initialHasMore: _initialHasMore,
+  initialCursor: _initialCursor,
   initialSort,
   initialFilterType,
   initialPlatform,
 }: Props) {
-  const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>(initialPlatform);
   const [sort, setSort] = useState<'published' | 'views_day' | 'views_week'>(initialSort);
   const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'live' | 'vod'>(initialFilterType);
-  const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -69,43 +71,56 @@ export default function Ui({
     youtube: ['all', 'video', 'short'],
     chzzk: ['all', 'vod', 'live'],
   };
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  // 중복 호출 가드 (fetch 중엔 또 부르지 않게)
-  const loadingRef = useRef(false);
-  // 중복 아이템 가드 (이미 붙인 videoId 재삽입 방지)
-  const seenIdsRef = useRef<Set<string>>(new Set(initialItems.map((i) => i.videoId)));
-  const cursorRef = useRef<string | null>(cursor);
-  const hasMoreRef = useRef<boolean>(hasMore);
-  const acRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    cursorRef.current = cursor;
-  }, [cursor]);
-
-  useEffect(() => {
-    hasMoreRef.current = hasMore;
-  }, [hasMore]);
-  // 현재 화면 조건(플랫폼|정렬) 키 보관 → 스테일 응답 가드에 사용
-  const paramsKeyRef = useRef('');
-  useEffect(() => {
-    paramsKeyRef.current = `${platform}|${sort}|${filterType}`;
-    if (acRef.current) {
-      acRef.current.abort();
-      acRef.current = null;
-      loadingRef.current = false;
+  const { data, status, error, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, refetch } = useInfiniteQuery(
+    {
+      queryKey: ['feed', { platform, sort, filterType }],
+      initialPageParam: null as string | null,
+      queryFn: async ({ pageParam, signal }) => {
+        const sp = new URLSearchParams({
+          scope: 'all',
+          sort,
+          platform,
+          filterType,
+          limit: '24',
+        });
+        if (pageParam) sp.set('cursor', pageParam);
+        const res = await fetch(`/api/feed?${sp.toString()}`, {
+          cache: 'no-store',
+          signal,
+        });
+        if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
+        return res.json() as Promise<{ items: FeedItem[]; hasMore: boolean; cursor: string | null }>;
+      },
+      getNextPageParam: (lastPage) => (lastPage.hasMore && lastPage.cursor ? lastPage.cursor : undefined),
     }
-  }, [platform, sort, filterType]);
+  );
+
+  const flatItems = useMemo(() => {
+    const pages = data?.pages ?? [];
+    const seen = new Set<string>();
+    const out: FeedItem[] = [];
+    for (const p of pages) {
+      for (const it of p.items ?? []) {
+        if (seen.has(it.videoId)) continue;
+        seen.add(it.videoId);
+        out.push(it);
+      }
+    }
+    return out;
+  }, [data]);
+
+  const { ref: loadMoreRef, inView } = useInView({
+    root: null,
+    rootMargin: '100px 0px',
+    threshold: 0,
+  });
 
   useEffect(() => {
-    setItems(initialItems);
-    setCursor(initialCursor);
-    setHasMore(initialHasMore);
-    seenIdsRef.current = new Set(initialItems.map((i) => i.videoId));
-    loadingRef.current = false;
-
-    cursorRef.current = initialCursor;
-    hasMoreRef.current = initialHasMore;
-  }, [initialItems, initialCursor, initialHasMore]);
+    if (inView && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // URL → 탭 상태 동기화 (초기 렌더링 및 URL 변경시)
   useEffect(() => {
@@ -156,67 +171,6 @@ export default function Ui({
     }
   }, [platform, filterType]);
 
-  async function fetchMore() {
-    if (loadingRef.current) return;
-    if (!hasMoreRef.current || !cursorRef.current) return;
-    loadingRef.current = true;
-
-    // 요청 시점의 조건 스냅샷 (플랫폼|정렬)
-    const requestedKey = paramsKeyRef.current;
-    if (acRef.current) acRef.current.abort();
-    const ac = new AbortController();
-    acRef.current = ac;
-    console.log(acRef.current);
-    try {
-      const sp = new URLSearchParams(searchParams.toString());
-      sp.set('cursor', cursorRef.current!);
-      const url = `/api/feed?${sp.toString()}`;
-
-      const res = await fetch(url, { cache: 'no-store', signal: ac.signal });
-      if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
-      const data = await res.json();
-
-      // 요청 중에 플랫폼/정렬이 바뀌었으면(=스테일 응답) 폐기
-      if (paramsKeyRef.current !== requestedKey) return;
-
-      // 중복 아이템 제거
-      const newItems: FeedItem[] = (data.items || []).filter((item: FeedItem) => {
-        if (seenIdsRef.current.has(item.videoId)) return false;
-        seenIdsRef.current.add(item.videoId);
-        return true;
-      });
-
-      setItems((prev) => [...prev, ...newItems]);
-      setCursor(data.cursor ?? null);
-      setHasMore(!!data.hasMore);
-    } catch (e) {
-      console.error('Feed fetch failed', e);
-    } finally {
-      if (acRef.current === ac) acRef.current = null;
-      loadingRef.current = false;
-    }
-  }
-
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const ent = entries[0];
-        if (ent.isIntersecting) fetchMore();
-      },
-      {
-        root: null,
-        rootMargin: '100px 0px',
-        threshold: 0,
-      }
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [cursor, hasMore]);
-
   return (
     <div className="flex w-full h-screen">
       <SideBar />
@@ -237,15 +191,42 @@ export default function Ui({
         </div>
 
         <div className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((item) => (
-              <VideoCard key={item.videoId} item={item} />
-            ))}
-          </div>
+          {status === 'pending' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 24 }).map((_, i) => (
+                <div key={i} className="aspect-video rounded-md bg-gray-200 animate-pulse" />
+              ))}
+            </div>
+          )}
 
-          {hasMore && (
-            <div ref={sentinelRef} className="h-8 my-8 grid place-items-center text-xs text-gray-500">
-              {loadingRef.current ? '불러오는 중…' : '아래로 스크롤하여 더 보기'}
+          {status === 'error' && (
+            <div className="p-4 text-sm text-red-600">
+              피드를 불러오지 못했습니다.{' '}
+              <button className="underline" onClick={() => refetch()}>
+                다시 시도
+              </button>
+            </div>
+          )}
+
+          {status === 'success' && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {flatItems.map((item) => (
+                  <VideoCard key={item.videoId} item={item} />
+                ))}
+              </div>
+
+              {hasNextPage && (
+                <div ref={loadMoreRef} className="h-8 my-8 grid place-items-center text-xs text-gray-500">
+                  {isFetchingNextPage ? '불러오는 중…' : '아래로 스크롤하여 더 보기'}
+                </div>
+              )}
+            </>
+          )}
+
+          {isFetching && status === 'success' && (
+            <div className="fixed bottom-3 right-3 text-xs bg-black/60 text-white px-2 py-1 rounded">
+              새 데이터 갱신 중…
             </div>
           )}
         </div>
