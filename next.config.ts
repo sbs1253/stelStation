@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      { protocol: 'https', hostname: 'yt3.ggpht.com', pathname: '/**' },
     ],
   },
 };

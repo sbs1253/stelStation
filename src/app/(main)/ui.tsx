@@ -2,9 +2,9 @@
 
 import PlatformFilter from '@/app/(main)/_component/filters/PlatformFilter';
 import SideBar from '@/app/(main)/_component/sideBar';
-import { formatKSTDate } from '@/lib/time/kst';
+import { formatKSTFriendlyDate, formatKSTLiveTime } from '@/lib/time/kst';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDuration } from '@/lib/time/duration';
@@ -12,6 +12,11 @@ import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
 import youtube_icon from '@/assets/icons/youtube_Icon.png';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import ResponsiveFilter from '@/app/(main)/_component/filters/responsiveFilter';
+
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInView } from 'react-intersection-observer';
+import { useMemo } from 'react';
+
 type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
 type PlatformType = 'all' | 'youtube' | 'chzzk';
 type FeedItem = {
@@ -47,19 +52,16 @@ type Props = {
 };
 
 export default function Ui({
-  initialItems,
-  initialHasMore,
-  initialCursor,
+  initialItems: _initialItems,
+  initialHasMore: _initialHasMore,
+  initialCursor: _initialCursor,
   initialSort,
   initialFilterType,
   initialPlatform,
 }: Props) {
-  const [items, setItems] = useState<FeedItem[]>(initialItems);
   const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>(initialPlatform);
   const [sort, setSort] = useState<'published' | 'views_day' | 'views_week'>(initialSort);
   const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'live' | 'vod'>(initialFilterType);
-  const [cursor, setCursor] = useState<string | null>(initialCursor);
-  const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -69,25 +71,56 @@ export default function Ui({
     youtube: ['all', 'video', 'short'],
     chzzk: ['all', 'vod', 'live'],
   };
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  // 중복 호출 가드 (fetch 중엔 또 부르지 않게)
-  const loadingRef = useRef(false);
-  // 중복 아이템 가드 (이미 붙인 videoId 재삽입 방지)
-  const seenIdsRef = useRef<Set<string>>(new Set(initialItems.map((i) => i.videoId)));
 
-  // 현재 화면 조건(플랫폼|정렬) 키 보관 → 스테일 응답 가드에 사용
-  const paramsKeyRef = useRef('');
-  useEffect(() => {
-    paramsKeyRef.current = `${platform}|${sort}|${filterType}`;
-  }, [platform, sort, filterType]);
+  const { data, status, error, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, refetch } = useInfiniteQuery(
+    {
+      queryKey: ['feed', { platform, sort, filterType }],
+      initialPageParam: null as string | null,
+      queryFn: async ({ pageParam, signal }) => {
+        const sp = new URLSearchParams({
+          scope: 'all',
+          sort,
+          platform,
+          filterType,
+          limit: '24',
+        });
+        if (pageParam) sp.set('cursor', pageParam);
+        const res = await fetch(`/api/feed?${sp.toString()}`, {
+          cache: 'no-store',
+          signal,
+        });
+        if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
+        return res.json() as Promise<{ items: FeedItem[]; hasMore: boolean; cursor: string | null }>;
+      },
+      getNextPageParam: (lastPage) => (lastPage.hasMore && lastPage.cursor ? lastPage.cursor : undefined),
+    }
+  );
+
+  const flatItems = useMemo(() => {
+    const pages = data?.pages ?? [];
+    const seen = new Set<string>();
+    const out: FeedItem[] = [];
+    for (const p of pages) {
+      for (const it of p.items ?? []) {
+        if (seen.has(it.videoId)) continue;
+        seen.add(it.videoId);
+        out.push(it);
+      }
+    }
+    return out;
+  }, [data]);
+
+  const { ref: loadMoreRef, inView } = useInView({
+    root: null,
+    rootMargin: '100px 0px',
+    threshold: 0,
+  });
 
   useEffect(() => {
-    setItems(initialItems);
-    setCursor(initialCursor);
-    setHasMore(initialHasMore);
-    seenIdsRef.current = new Set(initialItems.map((i) => i.videoId));
-    loadingRef.current = false;
-  }, [initialItems, initialCursor, initialHasMore]);
+    if (inView && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // URL → 탭 상태 동기화 (초기 렌더링 및 URL 변경시)
   useEffect(() => {
@@ -133,68 +166,10 @@ export default function Ui({
   // 플랫폼 변경 시 필터 호환성 처리
   useEffect(() => {
     const contentTypes = PLATFORM_CONTENT_TYPES[platform];
-    // 현재 필터가 새 플랫폼에서 유효하지 않다면, 'all'으로 초기화
     if (!contentTypes.includes(filterType)) {
       setFilterType('all');
     }
   }, [platform, filterType]);
-
-  async function fetchMore() {
-    if (loadingRef.current) return;
-    if (!hasMore || !cursor) return;
-    loadingRef.current = true;
-
-    // 요청 시점의 조건 스냅샷 (플랫폼|정렬)
-    const requestedKey = paramsKeyRef.current;
-
-    try {
-      const sp = new URLSearchParams(searchParams.toString());
-      sp.set('cursor', cursor);
-      const url = `/api/feed?${sp.toString()}`;
-
-      const res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
-      const data = await res.json();
-
-      // 요청 중에 플랫폼/정렬이 바뀌었으면(=스테일 응답) 폐기
-      if (paramsKeyRef.current !== requestedKey) return;
-
-      // 중복 아이템 제거
-      const newItems: FeedItem[] = (data.items || []).filter((item: FeedItem) => {
-        if (seenIdsRef.current.has(item.videoId)) return false;
-        seenIdsRef.current.add(item.videoId);
-        return true;
-      });
-
-      setItems((prev) => [...prev, ...newItems]);
-      setCursor(data.cursor ?? null);
-      setHasMore(!!data.hasMore);
-    } catch (e) {
-      console.error('Feed fetch failed', e);
-    } finally {
-      loadingRef.current = false;
-    }
-  }
-
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const ent = entries[0];
-        if (ent.isIntersecting) fetchMore();
-      },
-      {
-        root: null,
-        rootMargin: '100px 0px',
-        threshold: 0,
-      }
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [cursor, hasMore, searchParams]);
 
   return (
     <div className="flex w-full h-screen">
@@ -216,15 +191,42 @@ export default function Ui({
         </div>
 
         <div className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((item) => (
-              <VideoCard key={item.videoId} item={item} />
-            ))}
-          </div>
+          {status === 'pending' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 24 }).map((_, i) => (
+                <div key={i} className="aspect-video rounded-md bg-gray-200 animate-pulse" />
+              ))}
+            </div>
+          )}
 
-          {hasMore && (
-            <div ref={sentinelRef} className="h-8 my-8 grid place-items-center text-xs text-gray-500">
-              {loadingRef.current ? '불러오는 중…' : '아래로 스크롤하여 더 보기'}
+          {status === 'error' && (
+            <div className="p-4 text-sm text-red-600">
+              피드를 불러오지 못했습니다.{' '}
+              <button className="underline" onClick={() => refetch()}>
+                다시 시도
+              </button>
+            </div>
+          )}
+
+          {status === 'success' && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {flatItems.map((item) => (
+                  <VideoCard key={item.videoId} item={item} />
+                ))}
+              </div>
+
+              {hasNextPage && (
+                <div ref={loadMoreRef} className="h-8 my-8 grid place-items-center text-xs text-gray-500">
+                  {isFetchingNextPage ? '불러오는 중…' : '아래로 스크롤하여 더 보기'}
+                </div>
+              )}
+            </>
+          )}
+
+          {isFetching && status === 'success' && (
+            <div className="fixed bottom-3 right-3 text-xs bg-black/60 text-white px-2 py-1 rounded">
+              새 데이터 갱신 중…
             </div>
           )}
         </div>
@@ -232,28 +234,38 @@ export default function Ui({
     </div>
   );
 }
+function compact(n?: number | null) {
+  if (n == null) return '';
+  return new Intl.NumberFormat('ko', { notation: 'compact' }).format(n);
+}
 
-// 추후 파일 분리 예정
 function VideoCard({ item }: { item: FeedItem }) {
-  const getThumbnailUrl = (thumb: string) => {
-    if (thumb.includes('{type}')) {
-      return thumb.replace('{type}', '720');
-    }
-    return thumb;
+  // 해당 비디오가 라이브일 때만 true
+  const isLive = item.contentType === 'live';
+
+  const getThumbnailUrl = (thumb?: string | null) => {
+    if (!thumb) return null;
+    return thumb.includes('{type}') ? thumb.replace('{type}', '720') : thumb;
   };
 
-  const thumbnailUrl = getThumbnailUrl(item.thumb ?? '');
+  const thumbnailUrl = getThumbnailUrl(item.thumb);
+  const published = item.publishedAt ? new Date(item.publishedAt) : null;
+
   return (
     <div className="flex flex-col overflow-hidden">
       <Link href={item.url} className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200">
-        <Image
-          src={thumbnailUrl}
-          alt={item.title}
-          fill
-          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
-          // 👈 group-hover를 사용해 부모 Link에 호버 시 이미지 확대
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+        {thumbnailUrl ? (
+          <Image
+            src={thumbnailUrl}
+            alt={item.title}
+            fill
+            sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>
+        )}
+
         {item.platform === 'youtube' ? (
           <div className="absolute top-2 right-2 group-hover:scale-105">
             <Image src={youtube_icon} alt="유튜브 아이콘" width={24} height={24} />
@@ -263,26 +275,48 @@ function VideoCard({ item }: { item: FeedItem }) {
             <Image src={chzzk_icon} alt="치지직 아이콘" width={20} height={20} />
           </div>
         )}
-        <span className="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1 rounded">
-          {item.durationSec !== null && formatDuration(item.durationSec)}
-        </span>
+
+        {/* 배지: 라이브면 LIVE, 아니면 길이 */}
+        {!isLive && item.durationSec != null ? (
+          <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1 rounded">
+            {formatDuration(item.durationSec)}
+          </span>
+        ) : isLive ? (
+          <span
+            className="absolute bottom-1 right-1 rounded bg-red-600 px-1 text-xs text-white"
+            aria-label="라이브 방송 중"
+          >
+            LIVE{item.stats?.views ? ` · ${compact(item.stats.views)}` : ''}
+          </span>
+        ) : null}
       </Link>
 
       <div className="flex gap-3 pt-3">
         <Link href={item.channel.url}>
-          <Avatar className="size-10">
+          {/* border-1 → border */}
+          <Avatar className={`size-10 ${isLive ? 'border border-red-600' : ''}`}>
             <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
             <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
           </Avatar>
         </Link>
+
         <div className="flex flex-col items-start">
           <Link href={item.url}>
-            <h4 className="font-bold leading-snug">{item.title}</h4>
+            <h4 className="font-bold leading-snug line-clamp-2">{item.title}</h4>
           </Link>
           <Link href={item.channel.url} className="hover:underline">
             <span className="text-sm text-gray-600">{item.channel.title}</span>
           </Link>
-          <p className="text-sm text-gray-600">{formatKSTDate(new Date(item.publishedAt || ''))}</p>
+
+          <p className="text-sm text-gray-600">
+            {isLive
+              ? published
+                ? `시작: ${formatKSTLiveTime(published)}`
+                : '방송 중'
+              : published
+              ? formatKSTFriendlyDate(published)
+              : ''}
+          </p>
         </div>
       </div>
     </div>

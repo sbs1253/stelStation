@@ -6,9 +6,30 @@ const KST_FORMATTER = new Intl.DateTimeFormat('en-CA', {
   month: '2-digit',
   day: '2-digit',
 });
+const KST_FRIENDLY_DATE_FORMATTER = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+const KST_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric',
+  hour12: true,
+});
 
 export function formatKSTDate(date: Date): string {
   return KST_FORMATTER.format(date);
+}
+export function formatKSTFriendlyDate(date: Date): string {
+  return KST_FRIENDLY_DATE_FORMATTER.format(date);
+}
+export function formatKSTLiveTime(date: Date): string {
+  return KST_DATE_TIME_FORMATTER.format(date);
 }
 
 export function kstToday(now: Date = new Date()): string {
