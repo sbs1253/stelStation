@@ -2,7 +2,7 @@
 
 import PlatformFilter from '@/app/(main)/_component/filters/PlatformFilter';
 import SideBar from '@/app/(main)/_component/sideBar';
-import { formatKSTDate } from '@/lib/time/kst';
+import { formatKSTFriendlyDate, formatKSTLiveTime } from '@/lib/time/kst';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
@@ -74,11 +74,26 @@ export default function Ui({
   const loadingRef = useRef(false);
   // 중복 아이템 가드 (이미 붙인 videoId 재삽입 방지)
   const seenIdsRef = useRef<Set<string>>(new Set(initialItems.map((i) => i.videoId)));
+  const cursorRef = useRef<string | null>(cursor);
+  const hasMoreRef = useRef<boolean>(hasMore);
+  const acRef = useRef<AbortController | null>(null);
 
+  useEffect(() => {
+    cursorRef.current = cursor;
+  }, [cursor]);
+
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
   // 현재 화면 조건(플랫폼|정렬) 키 보관 → 스테일 응답 가드에 사용
   const paramsKeyRef = useRef('');
   useEffect(() => {
     paramsKeyRef.current = `${platform}|${sort}|${filterType}`;
+    if (acRef.current) {
+      acRef.current.abort();
+      acRef.current = null;
+      loadingRef.current = false;
+    }
   }, [platform, sort, filterType]);
 
   useEffect(() => {
@@ -87,6 +102,9 @@ export default function Ui({
     setHasMore(initialHasMore);
     seenIdsRef.current = new Set(initialItems.map((i) => i.videoId));
     loadingRef.current = false;
+
+    cursorRef.current = initialCursor;
+    hasMoreRef.current = initialHasMore;
   }, [initialItems, initialCursor, initialHasMore]);
 
   // URL → 탭 상태 동기화 (초기 렌더링 및 URL 변경시)
@@ -133,7 +151,6 @@ export default function Ui({
   // 플랫폼 변경 시 필터 호환성 처리
   useEffect(() => {
     const contentTypes = PLATFORM_CONTENT_TYPES[platform];
-    // 현재 필터가 새 플랫폼에서 유효하지 않다면, 'all'으로 초기화
     if (!contentTypes.includes(filterType)) {
       setFilterType('all');
     }
@@ -141,18 +158,21 @@ export default function Ui({
 
   async function fetchMore() {
     if (loadingRef.current) return;
-    if (!hasMore || !cursor) return;
+    if (!hasMoreRef.current || !cursorRef.current) return;
     loadingRef.current = true;
 
     // 요청 시점의 조건 스냅샷 (플랫폼|정렬)
     const requestedKey = paramsKeyRef.current;
-
+    if (acRef.current) acRef.current.abort();
+    const ac = new AbortController();
+    acRef.current = ac;
+    console.log(acRef.current);
     try {
       const sp = new URLSearchParams(searchParams.toString());
-      sp.set('cursor', cursor);
+      sp.set('cursor', cursorRef.current!);
       const url = `/api/feed?${sp.toString()}`;
 
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await fetch(url, { cache: 'no-store', signal: ac.signal });
       if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
       const data = await res.json();
 
@@ -172,6 +192,7 @@ export default function Ui({
     } catch (e) {
       console.error('Feed fetch failed', e);
     } finally {
+      if (acRef.current === ac) acRef.current = null;
       loadingRef.current = false;
     }
   }
@@ -194,7 +215,7 @@ export default function Ui({
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [cursor, hasMore, searchParams]);
+  }, [cursor, hasMore]);
 
   return (
     <div className="flex w-full h-screen">
@@ -232,28 +253,38 @@ export default function Ui({
     </div>
   );
 }
+function compact(n?: number | null) {
+  if (n == null) return '';
+  return new Intl.NumberFormat('ko', { notation: 'compact' }).format(n);
+}
 
-// 추후 파일 분리 예정
 function VideoCard({ item }: { item: FeedItem }) {
-  const getThumbnailUrl = (thumb: string) => {
-    if (thumb.includes('{type}')) {
-      return thumb.replace('{type}', '720');
-    }
-    return thumb;
+  // 해당 비디오가 라이브일 때만 true
+  const isLive = item.contentType === 'live';
+
+  const getThumbnailUrl = (thumb?: string | null) => {
+    if (!thumb) return null;
+    return thumb.includes('{type}') ? thumb.replace('{type}', '720') : thumb;
   };
 
-  const thumbnailUrl = getThumbnailUrl(item.thumb ?? '');
+  const thumbnailUrl = getThumbnailUrl(item.thumb);
+  const published = item.publishedAt ? new Date(item.publishedAt) : null;
+
   return (
     <div className="flex flex-col overflow-hidden">
       <Link href={item.url} className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200">
-        <Image
-          src={thumbnailUrl}
-          alt={item.title}
-          fill
-          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
-          // 👈 group-hover를 사용해 부모 Link에 호버 시 이미지 확대
-          className="object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+        {thumbnailUrl ? (
+          <Image
+            src={thumbnailUrl}
+            alt={item.title}
+            fill
+            sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>
+        )}
+
         {item.platform === 'youtube' ? (
           <div className="absolute top-2 right-2 group-hover:scale-105">
             <Image src={youtube_icon} alt="유튜브 아이콘" width={24} height={24} />
@@ -263,26 +294,48 @@ function VideoCard({ item }: { item: FeedItem }) {
             <Image src={chzzk_icon} alt="치지직 아이콘" width={20} height={20} />
           </div>
         )}
-        <span className="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1 rounded">
-          {item.durationSec !== null && formatDuration(item.durationSec)}
-        </span>
+
+        {/* 배지: 라이브면 LIVE, 아니면 길이 */}
+        {!isLive && item.durationSec != null ? (
+          <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1 rounded">
+            {formatDuration(item.durationSec)}
+          </span>
+        ) : isLive ? (
+          <span
+            className="absolute bottom-1 right-1 rounded bg-red-600 px-1 text-xs text-white"
+            aria-label="라이브 방송 중"
+          >
+            LIVE{item.stats?.views ? ` · ${compact(item.stats.views)}` : ''}
+          </span>
+        ) : null}
       </Link>
 
       <div className="flex gap-3 pt-3">
         <Link href={item.channel.url}>
-          <Avatar className="size-10">
+          {/* border-1 → border */}
+          <Avatar className={`size-10 ${isLive ? 'border border-red-600' : ''}`}>
             <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
             <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
           </Avatar>
         </Link>
+
         <div className="flex flex-col items-start">
           <Link href={item.url}>
-            <h4 className="font-bold leading-snug">{item.title}</h4>
+            <h4 className="font-bold leading-snug line-clamp-2">{item.title}</h4>
           </Link>
           <Link href={item.channel.url} className="hover:underline">
             <span className="text-sm text-gray-600">{item.channel.title}</span>
           </Link>
-          <p className="text-sm text-gray-600">{formatKSTDate(new Date(item.publishedAt || ''))}</p>
+
+          <p className="text-sm text-gray-600">
+            {isLive
+              ? published
+                ? `시작: ${formatKSTLiveTime(published)}`
+                : '방송 중'
+              : published
+              ? formatKSTFriendlyDate(published)
+              : ''}
+          </p>
         </div>
       </div>
     </div>
