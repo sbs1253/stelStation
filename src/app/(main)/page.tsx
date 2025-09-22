@@ -32,7 +32,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {
       const first = new URL(url);
-      console.log(pageParam);
       if (pageParam) first.searchParams.set('cursor', pageParam);
       const res = await fetch(first.toString(), { cache: 'no-store' });
       if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
@@ -42,21 +41,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
       lastPage.hasMore && lastPage.cursor ? lastPage.cursor : undefined,
   });
 
-  const data = queryClient.getQueryData<{ items: any[]; hasMore: boolean; cursor: string | null }>([
-    'feed',
-    { platform, sort, filterType },
-  ]);
-
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <Ui
-        initialItems={data?.items ?? []}
-        initialHasMore={!!data?.hasMore}
-        initialCursor={data?.cursor ?? null}
-        initialSort={sort as 'published' | 'views_day' | 'views_week'}
-        initialPlatform={platform as 'all' | 'youtube' | 'chzzk'}
-        initialFilterType={filterType as 'all' | 'video' | 'short' | 'live' | 'vod'}
-      />
+      <Ui />
     </HydrationBoundary>
   );
 }

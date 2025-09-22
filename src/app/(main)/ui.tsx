@@ -4,7 +4,7 @@ import PlatformFilter from '@/app/(main)/_component/filters/PlatformFilter';
 import SideBar from '@/app/(main)/_component/sideBar';
 import { formatKSTFriendlyDate, formatKSTLiveTime } from '@/lib/time/kst';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDuration } from '@/lib/time/duration';
@@ -13,7 +13,7 @@ import youtube_icon from '@/assets/icons/youtube_Icon.png';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import ResponsiveFilter from '@/app/(main)/_component/filters/responsiveFilter';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
 import { useMemo } from 'react';
 
@@ -51,26 +51,43 @@ type Props = {
   initialPlatform: PlatformType;
 };
 
-export default function Ui({
-  initialItems: _initialItems,
-  initialHasMore: _initialHasMore,
-  initialCursor: _initialCursor,
-  initialSort,
-  initialFilterType,
-  initialPlatform,
-}: Props) {
-  const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>(initialPlatform);
-  const [sort, setSort] = useState<'published' | 'views_day' | 'views_week'>(initialSort);
-  const [filterType, setFilterType] = useState<'all' | 'video' | 'short' | 'live' | 'vod'>(initialFilterType);
+export default function Ui({}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const PLATFORM_CONTENT_TYPES = {
+  const platform = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
+  const sort = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
+  const filterTypeRaw = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
+
+  const allowedTypes = {
     all: ['all', 'video', 'short', 'vod', 'live'],
     youtube: ['all', 'video', 'short'],
     chzzk: ['all', 'vod', 'live'],
+  }[platform] as ContentFilterType[];
+  const filterType: ContentFilterType = (
+    allowedTypes.includes(filterTypeRaw) ? filterTypeRaw : 'all'
+  ) as ContentFilterType;
+
+  const setParam = (key: 'platform' | 'sort' | 'filterType', value: string) => {
+    const url = new URLSearchParams(searchParams.toString());
+    const isDefault =
+      (key === 'platform' && value === 'all') ||
+      (key === 'sort' && value === 'published') ||
+      (key === 'filterType' && value === 'all');
+
+    if (isDefault) url.delete(key);
+    else url.set(key, value);
+
+    const qs = url.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
   };
+
+  useEffect(() => {
+    if (!allowedTypes.includes(filterTypeRaw)) {
+      setParam('filterType', 'all');
+    }
+  }, [platform, filterTypeRaw]);
 
   const { data, status, error, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, refetch } = useInfiniteQuery(
     {
@@ -93,6 +110,7 @@ export default function Ui({
         return res.json() as Promise<{ items: FeedItem[]; hasMore: boolean; cursor: string | null }>;
       },
       getNextPageParam: (lastPage) => (lastPage.hasMore && lastPage.cursor ? lastPage.cursor : undefined),
+      placeholderData: keepPreviousData,
     }
   );
 
@@ -101,10 +119,10 @@ export default function Ui({
     const seen = new Set<string>();
     const out: FeedItem[] = [];
     for (const p of pages) {
-      for (const it of p.items ?? []) {
-        if (seen.has(it.videoId)) continue;
-        seen.add(it.videoId);
-        out.push(it);
+      for (const item of p.items ?? []) {
+        if (seen.has(item.videoId)) continue;
+        seen.add(item.videoId);
+        out.push(item);
       }
     }
     return out;
@@ -122,68 +140,19 @@ export default function Ui({
     }
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // URL → 탭 상태 동기화 (초기 렌더링 및 URL 변경시)
-  useEffect(() => {
-    const urlPlatform = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
-    const urlSort = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    const urlFilter = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
-    if (urlSort !== sort) {
-      setSort(urlSort);
-    }
-    if (urlFilter !== filterType) {
-      setFilterType(urlFilter);
-    }
-    if (urlPlatform !== platform) {
-      setPlatform(urlPlatform);
-    }
-  }, [searchParams]);
-
-  // 탭 상태 → URL 동기화 (변경시에만, 히스토리 누적 없이 교체)
-  useEffect(() => {
-    const platformInUrl = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
-    const sortInUrl = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
-    const filterInUrl = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
-    if (platformInUrl === platform && sortInUrl === sort && filterInUrl === filterType) return;
-    const sp = new URLSearchParams(searchParams.toString());
-    if (sort === 'published') {
-      sp.delete('sort');
-    } else {
-      sp.set('sort', sort);
-    }
-    if (filterType === 'all') {
-      sp.delete('filterType');
-    } else {
-      sp.set('filterType', filterType);
-    }
-    if (platform === 'all') {
-      sp.delete('platform');
-    } else {
-      sp.set('platform', platform);
-    }
-    router.replace(`${pathname}?${sp.toString()}`);
-  }, [platform, sort, filterType, pathname, router, searchParams]);
-
-  // 플랫폼 변경 시 필터 호환성 처리
-  useEffect(() => {
-    const contentTypes = PLATFORM_CONTENT_TYPES[platform];
-    if (!contentTypes.includes(filterType)) {
-      setFilterType('all');
-    }
-  }, [platform, filterType]);
-
   return (
     <div className="flex w-full h-screen">
       <SideBar />
       <main className="flex-1 overflow-y-auto">
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b">
           <div className="flex flex-wrap justify-between items-center gap-4">
-            <PlatformFilter value={platform} onChange={setPlatform} />
+            <PlatformFilter value={platform} onChange={(v) => setParam('platform', v)} />
             <div className="flex gap-2">
               <ResponsiveFilter
                 sortFilter={sort}
-                onSortFilterChange={setSort}
+                onSortFilterChange={(v) => setParam('sort', v)}
                 videoType={filterType}
-                onVideoTypeChange={setFilterType}
+                onVideoTypeChange={(v) => setParam('filterType', v)}
                 platform={platform}
               />
             </div>
@@ -200,10 +169,14 @@ export default function Ui({
           )}
 
           {status === 'error' && (
-            <div className="p-4 text-sm text-red-600">
-              피드를 불러오지 못했습니다.{' '}
-              <button className="underline" onClick={() => refetch()}>
-                다시 시도
+            <div className="p-4 text-sm text-red-600 flex items-center gap-2">
+              <span>피드를 불러오지 못했습니다.</span>
+              <button
+                className="underline hover:no-underline disabled:opacity-50"
+                onClick={() => refetch()}
+                disabled={isFetching}
+              >
+                {isFetching ? '재시도 중...' : '다시 시도'}
               </button>
             </div>
           )}
