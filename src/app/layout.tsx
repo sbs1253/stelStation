@@ -27,7 +27,7 @@ export default function RootLayout({
   const gaEnabled = process.env.NODE_ENV === 'production' && !!gaId && process.env.NEXT_PUBLIC_ENABLE_GA !== 'false';
   return (
     <html lang="ko" suppressHydrationWarning className={`${pretendard.variable} antialiased`}>
-      <body>
+      <body className="h-full overflow-hidden">
         <Providers>{children}</Providers>
 
         {/* Cloudflare Web Analytics (JS Beacon) */}

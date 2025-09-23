@@ -15,7 +15,6 @@ import ResponsiveFilter from '@/app/(main)/_component/filters/responsiveFilter';
 
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
-import { useMemo } from 'react';
 
 type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
 type PlatformType = 'all' | 'youtube' | 'chzzk';
@@ -42,15 +41,6 @@ type FeedItem = {
   url: string;
 };
 
-type Props = {
-  initialItems: FeedItem[];
-  initialHasMore: boolean;
-  initialCursor: string | null;
-  initialSort: 'published' | 'views_day' | 'views_week';
-  initialFilterType: ContentFilterType;
-  initialPlatform: PlatformType;
-};
-
 export default function Ui({}) {
   const router = useRouter();
   const pathname = usePathname();
@@ -59,15 +49,16 @@ export default function Ui({}) {
   const platform = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
   const sort = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
   const filterTypeRaw = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
-
   const allowedTypes = {
     all: ['all', 'video', 'short', 'vod', 'live'],
     youtube: ['all', 'video', 'short'],
     chzzk: ['all', 'vod', 'live'],
   }[platform] as ContentFilterType[];
+
   const filterType: ContentFilterType = (
     allowedTypes.includes(filterTypeRaw) ? filterTypeRaw : 'all'
   ) as ContentFilterType;
+  const isLiveTab = filterType === 'live';
 
   const setParam = (key: 'platform' | 'sort' | 'filterType', value: string) => {
     const url = new URLSearchParams(searchParams.toString());
@@ -89,49 +80,59 @@ export default function Ui({}) {
     }
   }, [platform, filterTypeRaw]);
 
-  const { data, status, error, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, refetch } = useInfiniteQuery(
-    {
-      queryKey: ['feed', { platform, sort, filterType }],
-      initialPageParam: null as string | null,
-      queryFn: async ({ pageParam, signal }) => {
-        const sp = new URLSearchParams({
-          scope: 'all',
-          sort,
-          platform,
-          filterType,
-          limit: '24',
-        });
-        if (pageParam) sp.set('cursor', pageParam);
-        const res = await fetch(`/api/feed?${sp.toString()}`, {
-          cache: 'no-store',
-          signal,
-        });
-        if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
-        return res.json() as Promise<{ items: FeedItem[]; hasMore: boolean; cursor: string | null }>;
-      },
-      getNextPageParam: (lastPage) => (lastPage.hasMore && lastPage.cursor ? lastPage.cursor : undefined),
-      placeholderData: keepPreviousData,
-    }
-  );
-
-  const flatItems = useMemo(() => {
-    const pages = data?.pages ?? [];
-    const seen = new Set<string>();
-    const out: FeedItem[] = [];
-    for (const p of pages) {
-      for (const item of p.items ?? []) {
-        if (seen.has(item.videoId)) continue;
-        seen.add(item.videoId);
-        out.push(item);
+  const {
+    data: items = [],
+    status,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetching,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ['feed', { platform, sort, filterType }],
+    initialPageParam: null as string | null,
+    queryFn: async ({ pageParam, signal }) => {
+      const sp = new URLSearchParams({
+        scope: 'all',
+        sort,
+        platform,
+        filterType,
+        limit: '24',
+      });
+      if (pageParam) sp.set('cursor', pageParam);
+      const res = await fetch(`/api/feed?${sp.toString()}`, {
+        cache: 'no-store',
+        signal,
+      });
+      if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
+      return res.json() as Promise<{ items: FeedItem[]; hasMore: boolean; cursor: string | null }>;
+    },
+    getNextPageParam: (lastPage) => (lastPage.hasMore && lastPage.cursor ? lastPage.cursor : undefined),
+    select: (data) => {
+      const seen = new Set<string>();
+      const out: FeedItem[] = [];
+      for (const p of data.pages) {
+        for (const it of p.items ?? []) {
+          if (!seen.has(it.videoId)) {
+            seen.add(it.videoId);
+            out.push(it);
+          }
+        }
       }
-    }
-    return out;
-  }, [data]);
+      return out;
+    },
+    placeholderData: keepPreviousData,
+
+    refetchInterval: isLiveTab ? 30_000 : 5 * 60_000,
+    refetchIntervalInBackground: false,
+  });
 
   const { ref: loadMoreRef, inView } = useInView({
     root: null,
     rootMargin: '100px 0px',
     threshold: 0,
+    delay: 500,
   });
 
   useEffect(() => {
@@ -141,8 +142,8 @@ export default function Ui({}) {
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <div className="flex w-full h-screen">
-      <SideBar />
+    <div className="flex w-full h-screen min-h-0">
+      <SideBar className="flex-shrink-0" />
       <main className="flex-1 overflow-y-auto">
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b">
           <div className="flex flex-wrap justify-between items-center gap-4">
@@ -184,7 +185,7 @@ export default function Ui({}) {
           {status === 'success' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {flatItems.map((item) => (
+                {items.map((item) => (
                   <VideoCard key={item.videoId} item={item} />
                 ))}
               </div>
@@ -213,7 +214,6 @@ function compact(n?: number | null) {
 }
 
 function VideoCard({ item }: { item: FeedItem }) {
-  // 해당 비디오가 라이브일 때만 true
   const isLive = item.contentType === 'live';
 
   const getThumbnailUrl = (thumb?: string | null) => {
@@ -226,7 +226,11 @@ function VideoCard({ item }: { item: FeedItem }) {
 
   return (
     <div className="flex flex-col overflow-hidden">
-      <Link href={item.url} className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200">
+      <Link
+        href={item.url}
+        target="_blank"
+        className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200"
+      >
         {thumbnailUrl ? (
           <Image
             src={thumbnailUrl}
@@ -234,6 +238,7 @@ function VideoCard({ item }: { item: FeedItem }) {
             fill
             sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
+            unoptimized
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>
@@ -249,7 +254,6 @@ function VideoCard({ item }: { item: FeedItem }) {
           </div>
         )}
 
-        {/* 배지: 라이브면 LIVE, 아니면 길이 */}
         {!isLive && item.durationSec != null ? (
           <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1 rounded">
             {formatDuration(item.durationSec)}
@@ -265,8 +269,7 @@ function VideoCard({ item }: { item: FeedItem }) {
       </Link>
 
       <div className="flex gap-3 pt-3">
-        <Link href={item.channel.url}>
-          {/* border-1 → border */}
+        <Link href={item.channel.url} target="_blank">
           <Avatar className={`size-10 ${isLive ? 'border border-red-600' : ''}`}>
             <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
             <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
@@ -274,10 +277,10 @@ function VideoCard({ item }: { item: FeedItem }) {
         </Link>
 
         <div className="flex flex-col items-start">
-          <Link href={item.url}>
+          <Link href={item.url} target="_blank">
             <h4 className="font-bold leading-snug line-clamp-2">{item.title}</h4>
           </Link>
-          <Link href={item.channel.url} className="hover:underline">
+          <Link href={item.channel.url} className="hover:underline" target="_blank">
             <span className="text-sm text-gray-600">{item.channel.title}</span>
           </Link>
 
