@@ -4,7 +4,7 @@ import PlatformFilter from '@/app/(main)/_component/filters/PlatformFilter';
 import SideBar from '@/app/(main)/_component/sideBar';
 import { formatKSTFriendlyDate, formatKSTLiveTime } from '@/lib/time/kst';
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDuration } from '@/lib/time/duration';
@@ -46,7 +46,11 @@ export default function Ui({}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  const [pendingPlatform, setPendingPlatform] = useState<'all' | 'youtube' | 'chzzk' | null>(null);
+  const [isNavPending, startTransition] = useTransition();
+
   const platform = (searchParams.get('platform') ?? 'all') as 'all' | 'youtube' | 'chzzk';
+
   const sort = (searchParams.get('sort') ?? 'published') as 'published' | 'views_day' | 'views_week';
   const filterTypeRaw = (searchParams.get('filterType') ?? 'all') as 'all' | 'video' | 'short' | 'live' | 'vod';
   const allowedTypes = {
@@ -70,8 +74,15 @@ export default function Ui({}) {
     if (isDefault) url.delete(key);
     else url.set(key, value);
 
+    // Optimistically reflect selection on the UI when platform tab is clicked
+    if (key === 'platform') {
+      setPendingPlatform(value as 'all' | 'youtube' | 'chzzk');
+    }
+
     const qs = url.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname);
+    startTransition(() => {
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    });
   };
 
   useEffect(() => {
@@ -79,6 +90,12 @@ export default function Ui({}) {
       setParam('filterType', 'all');
     }
   }, [platform, filterTypeRaw]);
+
+  useEffect(() => {
+    if (pendingPlatform && platform === pendingPlatform) {
+      setPendingPlatform(null);
+    }
+  }, [platform, pendingPlatform]);
 
   const {
     data: items = [],
@@ -144,10 +161,14 @@ export default function Ui({}) {
   return (
     <div className="flex w-full h-screen min-h-0">
       <SideBar className="flex-shrink-0" />
-      <main className="flex-1 overflow-y-auto">
+      <main className={`flex-1 overflow-y-auto ${isNavPending && 'opacity-70 pointer-events-none'}`}>
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b">
           <div className="flex flex-wrap justify-between items-center gap-4">
-            <PlatformFilter value={platform} onChange={(v) => setParam('platform', v)} />
+            <PlatformFilter
+              value={pendingPlatform ?? platform}
+              onChange={(v) => setParam('platform', v)}
+              disabled={isNavPending}
+            />
             <div className="flex gap-2">
               <ResponsiveFilter
                 sortFilter={sort}

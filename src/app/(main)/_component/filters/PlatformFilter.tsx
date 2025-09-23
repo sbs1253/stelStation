@@ -21,7 +21,15 @@ const PLATFORM_OPTIONS: Array<{ id: Platform; label: string; icon?: React.ReactN
   },
 ];
 
-export default function PlatformFilter({ value, onChange }: { value: Platform; onChange: (v: Platform) => void }) {
+export default function PlatformFilter({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: Platform;
+  onChange: (v: Platform) => void;
+  disabled?: boolean;
+}) {
   const isMobile = useIsMobile();
   return (
     <div>
@@ -40,6 +48,7 @@ export default function PlatformFilter({ value, onChange }: { value: Platform; o
             className={`flex flex-1 flex-shrink-0 items-center justify-center gap-2 ${
               isMobile ? 'px-2 py-1 min-w-[80px]' : 'px-4 py-2 min-w-[120px]'
             } data-[state=on]:bg-primary data-[state=on]:text-primary-foreground rounded-md border   basis-auto w-fit`}
+            disabled={disabled}
           >
             {option.icon ?? null}
             {option.label}
