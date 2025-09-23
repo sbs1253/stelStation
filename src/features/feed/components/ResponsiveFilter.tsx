@@ -13,8 +13,8 @@ import {
   DrawerTrigger,
 } from '@/components/ui/drawer';
 import { Button } from '@/components/ui/button';
-import ContentTypeFilter from '@/app/(main)/_component/filters/contentTypeFilter';
-import SortFilter from '@/app/(main)/_component/filters/sortFilter';
+import ContentTypeFilter from '@/features/feed/components/ContentTypeFilter';
+import SortFilter from '@/features/feed/components/SortFilter';
 import { Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';

@@ -22,6 +22,16 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "src/app/(main)/_component/_sideBar.tas",
+    "src/app/(main)/_component/filters/_sortFilter.tmp",
+    "src/app/(main)/_component/filters/_contentTypeFilter.tmp",
+    "src/app/(main)/_component/_sideBar.tmp",
+    "src/app/(main)/_component/filters/_responsiveFilter.tmp"
+  ],
   "exclude": ["node_modules"]
 }
