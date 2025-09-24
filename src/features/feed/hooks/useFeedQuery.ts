@@ -1,35 +1,46 @@
 'use client';
 
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
-import type { ContentFilterType, FeedItem, PlatformType } from '../types';
+import type { ContentFilterType, FeedItem, PlatformType, FeedScope, SortType } from '../types';
 import { feedKeys } from '../utils/feedKeys';
 
 export function useFeedQuery(params: {
+  scope?: FeedScope;
+  creatorId?: string | null;
+  channelIds?: string[] | null;
   platform: PlatformType;
-  sort: 'published' | 'views_day' | 'views_week';
+  sort: SortType;
   filterType: ContentFilterType;
 }) {
-  const { platform, sort, filterType } = params;
+  const { scope = 'all', creatorId = null, channelIds = null, platform, sort, filterType } = params;
   const isLiveTab = filterType === 'live';
 
   return useInfiniteQuery({
-    queryKey: feedKeys.all({ platform, sort, filterType }),
+    queryKey: feedKeys.all({ scope, creatorId, channelIds, platform, sort, filterType }),
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }) => {
       const qs = new URLSearchParams({
-        scope: 'all',
+        scope,
         sort,
         platform,
         filterType,
         limit: '24',
       });
+
+      if (scope === 'creator' && creatorId) qs.set('creatorId', creatorId);
+      if (scope === 'channels' && channelIds?.length) {
+        Array.from(new Set(channelIds))
+          .sort()
+          .forEach((id) => qs.append('channelIds', id));
+      }
+
       if (pageParam) qs.set('cursor', pageParam);
+
       const res = await fetch(`/api/feed?${qs.toString()}`, { cache: 'no-store', signal });
       if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
       return res.json() as Promise<{ items: FeedItem[]; hasMore: boolean; cursor: string | null }>;
     },
     getNextPageParam: (last) => (last.hasMore && last.cursor ? last.cursor : undefined),
-    // 평탄화 + 중복 제거
     select: (data) => {
       const seen = new Set<string>();
       const out: FeedItem[] = [];

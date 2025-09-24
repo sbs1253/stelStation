@@ -8,8 +8,8 @@ import { useInfiniteSentinel } from '@/features/feed/hooks/useInfiniteSentinel';
 import { useUrlFeedState } from '@/features/feed/hooks/useUrlFeedState';
 
 export default function Ui() {
-  const { platform, sort, filterType, pendingPlatform, isNavPending, setParam } = useUrlFeedState();
-
+  const { scope, creatorId, channelIds, platform, sort, filterType, pendingPlatform, isNavPending, setParam } =
+    useUrlFeedState();
   const {
     data: items = [],
     status,
@@ -19,7 +19,7 @@ export default function Ui() {
     isFetching,
     isFetchingNextPage,
     refetch,
-  } = useFeedQuery({ platform, sort, filterType });
+  } = useFeedQuery({ scope, creatorId, channelIds, platform, sort, filterType });
 
   const { ref: loadMoreRef } = useInfiniteSentinel({
     hasNextPage,

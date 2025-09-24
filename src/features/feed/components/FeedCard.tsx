@@ -32,7 +32,7 @@ export default function FeedCard({ item }: { item: FeedItem }) {
         target="_blank"
         className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200"
       >
-        {thumbnailUrl ? (
+        {/* {thumbnailUrl ? (
           <Image
             src={thumbnailUrl}
             alt={item.title}
@@ -43,8 +43,8 @@ export default function FeedCard({ item }: { item: FeedItem }) {
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>
-        )}
-
+        )} */}
+        (<div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>)
         {item.platform === 'youtube' ? (
           <div className="absolute top-2 right-2 group-hover:scale-105">
             <Image src={youtube_icon} alt="유튜브 아이콘" width={24} height={24} />
@@ -54,7 +54,6 @@ export default function FeedCard({ item }: { item: FeedItem }) {
             <Image src={chzzk_icon} alt="치지직 아이콘" width={20} height={20} />
           </div>
         )}
-
         {!isLive && item.durationSec != null ? (
           <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1 rounded">
             {formatDuration(item.durationSec)}
@@ -72,17 +71,17 @@ export default function FeedCard({ item }: { item: FeedItem }) {
       <div className="flex gap-3 pt-3">
         <Link href={item.channel.url} target="_blank">
           <Avatar className={`size-10 ${isLive ? 'border border-red-600' : ''}`}>
-            <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
+            {/* <AvatarImage className="object-cover" src={item.channel.thumb || ''} /> */}
             <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
           </Avatar>
         </Link>
 
         <div className="flex flex-col items-start">
           <Link href={item.url} target="_blank">
-            <h4 className="font-bold leading-snug line-clamp-2">{item.title}</h4>
+            {/* <h4 className="font-bold leading-snug line-clamp-2">{item.title}</h4> */}
           </Link>
           <Link href={item.channel.url} className="hover:underline" target="_blank">
-            <span className="text-sm text-gray-600">{item.channel.title}</span>
+            {/* <span className="text-sm text-gray-600">{item.channel.title}</span> */}
           </Link>
 
           <p className="text-sm text-gray-600">

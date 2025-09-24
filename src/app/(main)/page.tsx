@@ -28,7 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
 
   const queryClient = new QueryClient();
   await queryClient.prefetchInfiniteQuery({
-    queryKey: ['feed', { platform, sort, filterType }],
+    queryKey: ['feed', { scope: 'all', platform, sort, filterType }],
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }) => {
       const first = new URL(url);

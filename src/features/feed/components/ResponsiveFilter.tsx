@@ -18,10 +18,8 @@ import SortFilter from '@/features/feed/components/SortFilter';
 import { Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import type { ContentFilterType, SortType, PlatformType } from '@/features/feed/types';
 
-type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
-type SortFilterType = 'published' | 'views_day' | 'views_week';
-type PlatformType = 'all' | 'youtube' | 'chzzk';
 export default function ResponsiveFilter({
   sortFilter,
   onSortFilterChange,
@@ -29,8 +27,8 @@ export default function ResponsiveFilter({
   onVideoTypeChange,
   platform,
 }: {
-  sortFilter: SortFilterType;
-  onSortFilterChange: (v: SortFilterType) => void;
+  sortFilter: SortType;
+  onSortFilterChange: (v: SortType) => void;
   videoType: ContentFilterType;
   onVideoTypeChange: (v: ContentFilterType) => void;
   platform: PlatformType;
