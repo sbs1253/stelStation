@@ -24,9 +24,15 @@ export function useUrlFeedState() {
   const allowed = ALLOWED_CONTENT_BY_PLATFORM[platform];
   const filterType = (allowed.includes(rawType) ? rawType : 'all') as ContentFilterType;
 
+  const commit = (next: URLSearchParams) => {
+    if (next.toString() === sp.toString()) return;
+    startTransition(() => {
+      router.replace(next.size ? `${pathname}?${next.toString()}` : pathname);
+    });
+  };
+
   const setParam = (key: 'platform' | 'sort' | 'filterType' | 'scope' | 'creatorId', value: string) => {
     const next = new URLSearchParams(sp.toString());
-
     const isDefault =
       (key === 'platform' && value === 'all') ||
       (key === 'sort' && value === 'published') ||
@@ -37,11 +43,12 @@ export function useUrlFeedState() {
     if (isDefault) next.delete(key);
     else next.set(key, value);
 
-    if (key === 'platform') setPendingPlatform(value as PlatformType);
+    if (key === 'platform') {
+      setPendingPlatform(value as PlatformType);
+      next.delete('filterType');
+    }
 
-    startTransition(() => {
-      router.replace(next.size ? `${pathname}?${next.toString()}` : pathname);
-    });
+    commit(next);
   };
 
   const setChannelIds = (ids: string[]) => {
@@ -50,14 +57,17 @@ export function useUrlFeedState() {
     Array.from(new Set(ids))
       .sort()
       .forEach((id) => next.append('channelIds', id));
-    startTransition(() => {
-      router.replace(next.size ? `${pathname}?${next.toString()}` : pathname);
-    });
+    commit(next);
   };
 
   useEffect(() => {
-    if (!allowed.includes(filterType)) setParam('filterType', 'all');
-  }, [platform]);
+    // 최초 1회만 URL 정규화 -> url로 진입시 초기화 위함
+    if (!allowed.includes(rawType)) {
+      const next = new URLSearchParams(sp.toString());
+      next.delete('filterType');
+      commit(next);
+    }
+  }, []);
 
   useEffect(() => {
     if (pendingPlatform && platform === pendingPlatform) setPendingPlatform(null);

@@ -6,6 +6,7 @@ import FeedControls from '@/features/feed/components/FeedControls';
 import { useFeedQuery } from '@/features/feed/hooks/useFeedQuery';
 import { useInfiniteSentinel } from '@/features/feed/hooks/useInfiniteSentinel';
 import { useUrlFeedState } from '@/features/feed/hooks/useUrlFeedState';
+import { useEffect, useRef } from 'react';
 
 export default function Ui() {
   const { scope, creatorId, channelIds, platform, sort, filterType, pendingPlatform, isNavPending, setParam } =
@@ -29,12 +30,16 @@ export default function Ui() {
     threshold: 0,
     delay: 500,
   });
+  const mainRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [platform, sort, filterType]);
   return (
     <div className="flex w-full h-screen min-h-0">
       <SideBar className="flex-shrink-0" />
 
-      <main className={`flex-1 overflow-y-auto ${isNavPending && 'opacity-70 pointer-events-none'}`}>
+      <main ref={mainRef} className={`flex-1 overflow-y-auto ${isNavPending && 'opacity-70 pointer-events-none'}`}>
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b">
           <FeedControls
             platform={platform}

@@ -122,10 +122,6 @@ export default function ResponsiveFilter({
               </DrawerContent>
             </Drawer>
           </div>
-          {/* <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{sortOptions.find((o) => o.id === sortFilter)?.label}</Badge>
-              <Badge variant="secondary">{contentTypes.find((t) => t.id === tempVideoType)?.label}</Badge>
-            </div> */}
         </div>
       ) : (
         /* Desktop: 정렬 & 필터 컴포넌트 모두 표시 */
