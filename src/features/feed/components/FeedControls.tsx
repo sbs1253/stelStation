@@ -15,13 +15,13 @@ type Props = {
 
 export default function FeedControls({ platform, sort, filterType, onChange, pendingPlatform, isNavPending }: Props) {
   return (
-    <div className="flex flex-wrap justify-between items-center gap-4">
+    <div className="flex flex-col items-start gap-4 w-full min-w-0">
       <PlatformFilter
         value={pendingPlatform ?? platform}
         onChange={(v) => onChange('platform', v)}
         disabled={isNavPending}
       />
-      <div className="flex gap-2">
+      <div className="flex">
         <ResponsiveFilter
           sortFilter={sort}
           onSortFilterChange={(v) => onChange('sort', v)}

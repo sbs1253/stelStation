@@ -18,10 +18,8 @@ import SortFilter from '@/features/feed/components/SortFilter';
 import { Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import type { ContentFilterType, SortType, PlatformType } from '@/features/feed/types';
 
-type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
-type SortFilterType = 'published' | 'views_day' | 'views_week';
-type PlatformType = 'all' | 'youtube' | 'chzzk';
 export default function ResponsiveFilter({
   sortFilter,
   onSortFilterChange,
@@ -29,8 +27,8 @@ export default function ResponsiveFilter({
   onVideoTypeChange,
   platform,
 }: {
-  sortFilter: SortFilterType;
-  onSortFilterChange: (v: SortFilterType) => void;
+  sortFilter: SortType;
+  onSortFilterChange: (v: SortType) => void;
   videoType: ContentFilterType;
   onVideoTypeChange: (v: ContentFilterType) => void;
   platform: PlatformType;
@@ -64,8 +62,8 @@ export default function ResponsiveFilter({
     <div className="flex items-center justify-between">
       {isMobile ? (
         /* Mobile: 현재 필터 상태만 표시 */
-        <div className="w-full flex flex-col items-center gap-2">
-          <div className="ml-4">
+        <div className="w-full flex flex-col items-center">
+          <div className="ml-1">
             <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
               <DrawerTrigger asChild>
                 <Button variant="default" size="sm" className="relative gap-2" onClick={handleDrawerOpen}>
@@ -124,10 +122,6 @@ export default function ResponsiveFilter({
               </DrawerContent>
             </Drawer>
           </div>
-          {/* <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{sortOptions.find((o) => o.id === sortFilter)?.label}</Badge>
-              <Badge variant="secondary">{contentTypes.find((t) => t.id === tempVideoType)?.label}</Badge>
-            </div> */}
         </div>
       ) : (
         /* Desktop: 정렬 & 필터 컴포넌트 모두 표시 */

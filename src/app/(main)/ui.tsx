@@ -6,10 +6,13 @@ import FeedControls from '@/features/feed/components/FeedControls';
 import { useFeedQuery } from '@/features/feed/hooks/useFeedQuery';
 import { useInfiniteSentinel } from '@/features/feed/hooks/useInfiniteSentinel';
 import { useUrlFeedState } from '@/features/feed/hooks/useUrlFeedState';
+import { useEffect, useRef } from 'react';
+import FeedSkeleton from '@/features/feed/components/FeedSkeleton';
+import FeedError from '@/features/feed/components/FeedError';
 
 export default function Ui() {
-  const { platform, sort, filterType, pendingPlatform, isNavPending, setParam } = useUrlFeedState();
-
+  const { scope, creatorId, channelIds, platform, sort, filterType, pendingPlatform, isNavPending, setParam } =
+    useUrlFeedState();
   const {
     data: items = [],
     status,
@@ -19,23 +22,27 @@ export default function Ui() {
     isFetching,
     isFetchingNextPage,
     refetch,
-  } = useFeedQuery({ platform, sort, filterType });
+  } = useFeedQuery({ scope, creatorId, channelIds, platform, sort, filterType });
 
   const { ref: loadMoreRef } = useInfiniteSentinel({
     hasNextPage,
-    isFetchingNextPage: !!isFetchingNextPage,
+    isFetchingNextPage,
     fetchNextPage,
     rootMargin: '100px 0px',
     threshold: 0,
     delay: 500,
   });
+  const mainRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [platform, sort, filterType]);
   return (
     <div className="flex w-full h-screen min-h-0">
       <SideBar className="flex-shrink-0" />
 
-      <main className={`flex-1 overflow-y-auto ${isNavPending && 'opacity-70 pointer-events-none'}`}>
-        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b">
+      <main ref={mainRef} className={`flex-1 overflow-y-auto ${isNavPending ? 'opacity-70 pointer-events-none' : ''}`}>
+        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b ">
           <FeedControls
             platform={platform}
             sort={sort}
@@ -47,26 +54,9 @@ export default function Ui() {
         </div>
 
         <div className="p-4">
-          {status === 'pending' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {Array.from({ length: 24 }).map((_, i) => (
-                <div key={i} className="aspect-video rounded-md bg-gray-200 animate-pulse" />
-              ))}
-            </div>
-          )}
+          {status === 'pending' && <FeedSkeleton count={24} />}
 
-          {status === 'error' && (
-            <div className="p-4 text-sm text-red-600 flex items-center gap-2">
-              <span>피드를 불러오지 못했습니다.</span>
-              <button
-                className="underline hover:no-underline disabled:opacity-50"
-                onClick={() => refetch()}
-                disabled={!!isFetching}
-              >
-                {isFetching ? '재시도 중...' : '다시 시도'}
-              </button>
-            </div>
-          )}
+          {status === 'error' && <FeedError isFetching={isFetching} refetch={refetch} />}
 
           {status === 'success' && (
             <>

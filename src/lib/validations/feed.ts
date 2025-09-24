@@ -1,14 +1,16 @@
 import { z } from 'zod';
 import { DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/config/constants';
-/** /api/feed 쿼리 스키마 (App Router의 URL → 객체) */
-export const FeedQuerySchema = z.object({
-  channelIds: z.array(z.string()).optional(), // 게스트용 (로그인 후엔 groupId 사용 예정)
-  groupId: z.string().optional(), // 로그인 후 확장 시 사용
+const FeedQuerySchema = z.object({
+  scope: z.enum(['all', 'creator', 'channels']).default('all'),
+  creatorId: z.string().optional(),
+  channelIds: z.array(z.string()).optional(),
+
+  platform: z.enum(['all', 'youtube', 'chzzk']).default('all'),
   sort: z.enum(['published', 'views_day', 'views_week']).default('published'),
   filterType: z.enum(['all', 'video', 'short', 'live', 'vod']).default('all'),
-  range: z.enum(['7', '30', '90', '120']).default('30'), // 현재는 표시 목적, 랭킹 계산엔 영향 없음
+
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
-  cursor: z.string().optional(),
+  cursor: z.string().nullable().optional(),
 });
 
 /** URLSearchParams → FeedQuerySchema 파싱 */
@@ -40,14 +42,22 @@ export function parseFeedQueryFromURL(url: URL) {
   const channelIds = uniqueIds.length ? uniqueIds : undefined;
 
   const obj = {
+    scope: (sp.get('scope') as any) || undefined,
+    creatorId: sp.get('creatorId') ?? undefined,
     channelIds,
-    groupId: sp.get('groupId') || undefined,
+
+    platform: (sp.get('platform') as any) || undefined,
     sort: (sp.get('sort') as any) || undefined,
     filterType: ((sp.get('filterType') || sp.get('filter.type')) as any) || undefined,
-    range: (sp.get('range') as any) || undefined,
+
     limit: sp.get('limit') || undefined,
     cursor: sp.get('cursor') || undefined,
   };
+  const parsed = FeedQuerySchema.parse(obj);
+  // scope 안줬지만 channelIds가 있으면 scope=channels로 간주
+  if ((!obj.scope || obj.scope === 'all') && parsed.channelIds && parsed.channelIds.length) {
+    return { ...parsed, scope: 'channels' as const };
+  }
 
-  return FeedQuerySchema.parse(obj);
+  return parsed;
 }

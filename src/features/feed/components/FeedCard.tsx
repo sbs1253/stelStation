@@ -44,7 +44,6 @@ export default function FeedCard({ item }: { item: FeedItem }) {
         ) : (
           <div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>
         )}
-
         {item.platform === 'youtube' ? (
           <div className="absolute top-2 right-2 group-hover:scale-105">
             <Image src={youtube_icon} alt="유튜브 아이콘" width={24} height={24} />
@@ -54,7 +53,6 @@ export default function FeedCard({ item }: { item: FeedItem }) {
             <Image src={chzzk_icon} alt="치지직 아이콘" width={20} height={20} />
           </div>
         )}
-
         {!isLive && item.durationSec != null ? (
           <span className="absolute bottom-1 right-1 bg-black/60 text-white text-xs px-1 rounded">
             {formatDuration(item.durationSec)}
