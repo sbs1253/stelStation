@@ -62,8 +62,8 @@ export default function ResponsiveFilter({
     <div className="flex items-center justify-between">
       {isMobile ? (
         /* Mobile: 현재 필터 상태만 표시 */
-        <div className="w-full flex flex-col items-center gap-2">
-          <div className="ml-4">
+        <div className="w-full flex flex-col items-center">
+          <div className="ml-1">
             <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
               <DrawerTrigger asChild>
                 <Button variant="default" size="sm" className="relative gap-2" onClick={handleDrawerOpen}>
