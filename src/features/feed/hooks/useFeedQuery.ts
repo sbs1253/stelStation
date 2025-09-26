@@ -3,6 +3,7 @@
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import type { ContentFilterType, FeedItem, PlatformType, FeedScope, SortType } from '../types';
 import { feedKeys } from '../utils/feedKeys';
+import { getFeedPageSize } from '../utils/pageSize';
 
 export function useFeedQuery(params: {
   scope?: FeedScope;
@@ -14,7 +15,7 @@ export function useFeedQuery(params: {
 }) {
   const { scope = 'all', creatorId = null, channelIds = null, platform, sort, filterType } = params;
   const isLiveTab = filterType === 'live';
-  const serverPlatform = scope === 'channels' ? 'all' : platform;
+  const pageSize = getFeedPageSize(scope);
 
   return useInfiniteQuery({
     queryKey: feedKeys.all({ scope, creatorId, channelIds, platform, sort, filterType }),
@@ -23,9 +24,9 @@ export function useFeedQuery(params: {
       const qs = new URLSearchParams({
         scope,
         sort,
-        platform: serverPlatform,
+        platform,
         filterType,
-        limit: '24',
+        limit: pageSize.toString(),
       });
 
       if (scope === 'creator' && creatorId) qs.set('creatorId', creatorId);
@@ -56,7 +57,11 @@ export function useFeedQuery(params: {
       return out;
     },
     placeholderData: keepPreviousData,
-    refetchInterval: isLiveTab ? 30_000 : 5 * 60_000,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: isLiveTab ? 30_000 : false,
     refetchIntervalInBackground: false,
   });
 }

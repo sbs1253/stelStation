@@ -36,6 +36,15 @@ jobs:
             -H "x-cron-secret: $CRON_SECRET" \
             -d '{}' | tee stats-snapshot.json
 
+      - name: Refresh ranking materialization
+        run: |
+          set -euo pipefail
+          curl -L -sS --fail-with-body --retry 3 --retry-all-errors --max-time 300 \
+            -X POST "$PROD_API_BASE/api/stats/rankings" \
+            -H "content-type: application/json" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -d '{}' | tee rankings-refresh.json
+
       - name: Purge old data (videos>120d, daily>30d)
         run: |
           set -euo pipefail
@@ -59,6 +68,10 @@ jobs:
             echo "### Stats snapshot"
             echo ""
             cat stats-snapshot.json
+            echo ""
+            echo "### Rankings refresh"
+            echo ""
+            cat rankings-refresh.json
             echo ""
             echo "### Purge old"
             echo ""

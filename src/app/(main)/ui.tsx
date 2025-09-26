@@ -4,6 +4,7 @@ import CreatorSidebar from '@/features/feed/components/CreatorSidebar';
 import FeedCard from '@/features/feed/components/FeedCard';
 import FeedControls from '@/features/feed/components/FeedControls';
 import { useFeedQuery } from '@/features/feed/hooks/useFeedQuery';
+import { getFeedPageSize } from '@/features/feed/utils/pageSize';
 import { useInfiniteSentinel } from '@/features/feed/hooks/useInfiniteSentinel';
 import { useUrlFeedState } from '@/features/feed/hooks/useUrlFeedState';
 import { useEffect, useRef, useState } from 'react';
@@ -34,6 +35,8 @@ export default function Ui() {
     refetch,
   } = useFeedQuery({ scope, creatorId, channelIds, platform, sort, filterType });
 
+  const pageSize = getFeedPageSize(scope);
+
   const { ref: loadMoreRef } = useInfiniteSentinel({
     hasNextPage,
     isFetchingNextPage,
@@ -48,7 +51,6 @@ export default function Ui() {
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [platform, sort, filterType]);
 
-  console.log('isNavPending', isNavPending, 'isFetching', isFetching);
   return (
     <div className="flex w-full h-screen min-h-0">
       <CreatorSidebar className="flex-shrink-0" />
@@ -69,15 +71,15 @@ export default function Ui() {
         </div>
 
         <div className="p-4">
-          {status === 'pending' && <FeedSkeleton count={24} />}
+          {status === 'pending' && <FeedSkeleton count={pageSize} />}
 
           {status === 'error' && <FeedError isFetching={isFetching} refetch={refetch} />}
 
           {status === 'success' && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {items.map((item) => (
-                  <FeedCard key={item.videoId} item={item} />
+                {items.map((item, index) => (
+                  <FeedCard key={item.videoId} item={item} priority={index < 6} />
                 ))}
               </div>
 

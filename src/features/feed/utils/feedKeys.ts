@@ -17,9 +17,7 @@ export const feedKeys = {
       sort: p.sort,
       filterType: p.filterType,
     };
-    if (scope !== 'channels') {
-      base.platform = p.platform;
-    }
+    base.platform = p.platform;
 
     if (scope === 'creator' && p.creatorId) {
       base.creatorId = p.creatorId;
