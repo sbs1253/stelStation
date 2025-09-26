@@ -14,6 +14,7 @@ export function useFeedQuery(params: {
 }) {
   const { scope = 'all', creatorId = null, channelIds = null, platform, sort, filterType } = params;
   const isLiveTab = filterType === 'live';
+  const serverPlatform = scope === 'channels' ? 'all' : platform;
 
   return useInfiniteQuery({
     queryKey: feedKeys.all({ scope, creatorId, channelIds, platform, sort, filterType }),
@@ -22,7 +23,7 @@ export function useFeedQuery(params: {
       const qs = new URLSearchParams({
         scope,
         sort,
-        platform,
+        platform: serverPlatform,
         filterType,
         limit: '24',
       });
@@ -46,10 +47,10 @@ export function useFeedQuery(params: {
       const out: FeedItem[] = [];
       for (const p of data.pages) {
         for (const it of p.items ?? []) {
-          if (!seen.has(it.videoId)) {
-            seen.add(it.videoId);
-            out.push(it);
-          }
+          if (seen.has(it.videoId)) continue;
+          if (scope === 'channels' && platform !== 'all' && it.platform !== platform) continue;
+          seen.add(it.videoId);
+          out.push(it);
         }
       }
       return out;

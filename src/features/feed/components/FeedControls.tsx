@@ -10,16 +10,16 @@ type Props = {
   filterType: ContentFilterType;
   onChange: (key: 'platform' | 'sort' | 'filterType', value: string) => void;
   pendingPlatform: PlatformType | null;
-  isNavPending: boolean;
+  isFetching: boolean;
 };
 
-export default function FeedControls({ platform, sort, filterType, onChange, pendingPlatform, isNavPending }: Props) {
+export default function FeedControls({ platform, sort, filterType, onChange, pendingPlatform, isFetching }: Props) {
   return (
     <div className="flex flex-col items-start gap-4 w-full min-w-0">
       <PlatformFilter
         value={pendingPlatform ?? platform}
         onChange={(v) => onChange('platform', v)}
-        disabled={isNavPending}
+        disabled={isFetching}
       />
       <div className="flex">
         <ResponsiveFilter

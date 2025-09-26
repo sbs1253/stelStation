@@ -14,17 +14,18 @@ export const feedKeys = {
     const scope = p.scope ?? 'all';
     const base: Record<string, unknown> = {
       scope,
-      platform: p.platform,
       sort: p.sort,
       filterType: p.filterType,
     };
+    if (scope !== 'channels') {
+      base.platform = p.platform;
+    }
 
     if (scope === 'creator' && p.creatorId) {
       base.creatorId = p.creatorId;
     }
 
     if (scope === 'channels' && p.channelIds?.length) {
-      // 순서/중복에 영향받지 않도록 정규화
       base.channelIds = Array.from(new Set(p.channelIds)).sort();
     }
 

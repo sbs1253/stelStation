@@ -3,10 +3,10 @@ import { encodeCursor, decodeCursor } from '@/lib/paging/cursor';
 import { mapPublishedRowToItem, mapRankingRowToItem } from '@/lib/feed/transform';
 import { makeChannelUrl, makeLiveUrl } from '@/lib/links';
 
-export type FeedScope = 'all' | 'creator' | 'channels';
+export type FeedScope = 'all' | 'channels';
 
 export type FeedParams = {
-  scope: FeedScope; // 'all' | 'creator' | 'channels'
+  scope: FeedScope; // 'all' | 'channels'
   creatorId?: string | null;
   channelIds?: string[] | null;
 
@@ -74,18 +74,16 @@ async function resolveChannelIds(ctx: {
 }): Promise<string[]> {
   const { supabase, scope, creatorId, channelIds, platform } = ctx;
 
-  // scope=channels: 넘겨준 목록 그대로 사용
+  // scope=channels: 넘겨준 목록 + 플랫폼 필터
   if (scope === 'channels') {
-    return (channelIds ?? []).filter(Boolean);
-  }
-
-  // scope=creator: 크리에이터 소유 채널 조회 (테이블명/스키마는 프로젝트에 맞게 조정)
-  if (scope === 'creator') {
-    if (!creatorId) return [];
-    // 예시: creators_channels(creator_id, channel_id)
-    const { data, error } = await supabase.from('creators_channels').select('channel_id').eq('creator_id', creatorId);
-    if (error || !data) return [];
-    return data.map((r: any) => r.channel_id).filter(Boolean);
+    const ids = (channelIds ?? []).filter(Boolean);
+    if (!ids.length) return [];
+    if (platform === 'youtube' || platform === 'chzzk') {
+      const { data, error } = await supabase.from('channels').select('id').in('id', ids).eq('platform', platform);
+      if (error || !data) return [];
+      return data.map((r: { id: string }) => r.id);
+    }
+    return ids;
   }
 
   // scope=all: 전체 채널(플랫폼 필터 포함)

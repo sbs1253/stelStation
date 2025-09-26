@@ -1,18 +1,28 @@
 'use client';
 
-import SideBar from '@/features/feed/components/SideBar';
+import CreatorSidebar from '@/features/feed/components/CreatorSidebar';
 import FeedCard from '@/features/feed/components/FeedCard';
 import FeedControls from '@/features/feed/components/FeedControls';
 import { useFeedQuery } from '@/features/feed/hooks/useFeedQuery';
 import { useInfiniteSentinel } from '@/features/feed/hooks/useInfiniteSentinel';
 import { useUrlFeedState } from '@/features/feed/hooks/useUrlFeedState';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import FeedSkeleton from '@/features/feed/components/FeedSkeleton';
 import FeedError from '@/features/feed/components/FeedError';
 
 export default function Ui() {
-  const { scope, creatorId, channelIds, platform, sort, filterType, pendingPlatform, isNavPending, setParam } =
-    useUrlFeedState();
+  const {
+    scope,
+    creatorId,
+    channelIds,
+    platform,
+    sort,
+    filterType,
+    pendingPlatform,
+    isNavPending,
+    setParam,
+    setParams,
+  } = useUrlFeedState();
   const {
     data: items = [],
     status,
@@ -37,11 +47,16 @@ export default function Ui() {
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [platform, sort, filterType]);
+
+  console.log('isNavPending', isNavPending, 'isFetching', isFetching);
   return (
     <div className="flex w-full h-screen min-h-0">
-      <SideBar className="flex-shrink-0" />
+      <CreatorSidebar className="flex-shrink-0" />
 
-      <main ref={mainRef} className={`flex-1 overflow-y-auto ${isNavPending ? 'opacity-70 pointer-events-none' : ''}`}>
+      <main
+        ref={mainRef}
+        className={`flex-1 overflow-y-auto ${isFetching || isNavPending ? 'opacity-70 pointer-events-none' : ''}`}
+      >
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b ">
           <FeedControls
             platform={platform}
@@ -49,7 +64,7 @@ export default function Ui() {
             filterType={filterType}
             onChange={setParam}
             pendingPlatform={pendingPlatform}
-            isNavPending={isNavPending}
+            isFetching={isFetching}
           />
         </div>
 

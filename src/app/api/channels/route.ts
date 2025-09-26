@@ -1,4 +1,3 @@
-// app/api/channels/route.ts
 import { NextResponse } from 'next/server';
 import { encodeCursor, decodeCursor } from '@/lib/paging/cursor';
 import { createSupabaseServer } from '@/lib/supabase/server';
@@ -37,7 +36,26 @@ export async function GET(request: Request) {
   const hasMore = allRows.length > query.limit;
   const rows = hasMore ? allRows.slice(0, query.limit) : allRows;
 
-  const items = rows.map(mapChannelRowToItem);
+  const channelIdsOnPage = rows.map((r: any) => r.channel_id);
+  const { data: ccRows, error: ccErr } = await supabaseService
+    .from('creator_channels')
+    .select('channel_id, creator_id')
+    .in('channel_id', channelIdsOnPage);
+  if (ccErr) {
+    return NextResponse.json({ error: 'DB error', details: ccErr.message }, { status: 500 });
+  }
+  const creatorByChannel: Record<string, string> = (ccRows ?? []).reduce((acc: Record<string, string>, r: any) => {
+    acc[r.channel_id] = r.creator_id;
+    return acc;
+  }, {});
+
+  const items = rows.map((row: any) => {
+    const base = mapChannelRowToItem(row);
+    return {
+      ...base,
+      creatorId: creatorByChannel[row.channel_id] ?? null,
+    };
+  });
 
   const last = rows[rows.length - 1] ?? null;
   const nextCursor =
