@@ -14,7 +14,7 @@ function compact(n?: number | null) {
   return new Intl.NumberFormat('ko', { notation: 'compact' }).format(n);
 }
 
-export default function FeedCard({ item }: { item: FeedItem }) {
+export default function FeedCard({ item, priority }: { item: FeedItem; priority: boolean }) {
   const isLive = item.contentType === 'live';
 
   const getThumbnailUrl = (thumb?: string | null) => {
@@ -32,14 +32,14 @@ export default function FeedCard({ item }: { item: FeedItem }) {
         className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200"
       >
         {thumbnailUrl ? (
-          // <Image
-          //   src={thumbnailUrl}
-          //   alt={item.title}
-          //   fill
-          //   sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 50vw"
-          //   className="object-cover transition-transform duration-300 group-hover:scale-105"
-          // />
-          <div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>
+          <Image
+            src={thumbnailUrl}
+            alt={item.title}
+            fill
+            sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            loading={priority ? 'eager' : 'lazy'}
+          />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>
         )}
@@ -69,7 +69,7 @@ export default function FeedCard({ item }: { item: FeedItem }) {
       <div className="flex gap-3 pt-3">
         <Link href={item.channel.url} target="_blank">
           <Avatar className={`size-10 ${isLive ? 'border border-red-600' : ''}`}>
-            {/* <AvatarImage className="object-cover" src={item.channel.thumb || ''} /> */}
+            <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
             <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
           </Avatar>
         </Link>

@@ -200,8 +200,14 @@ async function getPublishedPage(ctx: {
   // 변환 + 채널 메타 주입
   const items = rows.map((row) => {
     const ch = channelMap[row.channel_id];
-    const augmented =
-      ch && row.platform_channel_id == null ? { ...row, platform_channel_id: ch.platformChannelId } : row;
+    const augmented = ch
+      ? {
+          ...row,
+          ...(row.platform_channel_id == null && { platform_channel_id: ch.platformChannelId }),
+          ...(row.platform == null && { platform: ch.platform }),
+          ...(row.is_live_now == null && { is_live_now: ch.isLiveNow }),
+        }
+      : row;
     const base = mapPublishedRowToItem(augmented);
     return attachChannelMetaToItem(base, ch);
   });
@@ -258,8 +264,14 @@ async function getRankingPage(ctx: {
   const sortKind: 'views_day' | 'views_week' = isDay ? 'views_day' : 'views_week';
   const items = rows.map((row) => {
     const ch = channelMap[row.channel_id];
-    const augmented =
-      ch && row.platform_channel_id == null ? { ...row, platform_channel_id: ch.platformChannelId } : row;
+    const augmented = ch
+      ? {
+          ...row,
+          ...(row.platform_channel_id == null && { platform_channel_id: ch.platformChannelId }),
+          ...(row.platform == null && { platform: ch.platform }),
+          ...(row.is_live_now == null && { is_live_now: ch.isLiveNow }),
+        }
+      : row;
     const base = mapRankingRowToItem(augmented, sortKind);
     return attachChannelMetaToItem(base, ch);
   });
