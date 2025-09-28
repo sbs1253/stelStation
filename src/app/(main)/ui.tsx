@@ -53,7 +53,7 @@ export default function Ui() {
 
   return (
     <div className="flex w-full h-screen min-h-0">
-      <CreatorSidebar className="flex-shrink-0" />
+      {/* <CreatorSidebar className="flex-shrink-0" /> */}
 
       <main
         ref={mainRef}
