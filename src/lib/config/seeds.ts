@@ -4,6 +4,7 @@ export type SeedCreator = {
   youtube?: { ucId: string; handle?: string; url?: string };
   chzzk?: { channelId: string; url?: string };
   tags?: string[];
+  x?: string;
 };
 
 export const STEL_SEEDS: SeedCreator[] = [
@@ -15,6 +16,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       handle: 'stellive_official',
       url: 'https://www.youtube.com/@stellive_official',
     },
+    x: 'https://x.com/StelLive_kr',
   },
   // 강지
   {
@@ -28,6 +30,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       channelId: 'b5ed5db484d04faf4d150aedd362f34b',
       url: 'https://chzzk.naver.com/b5ed5db484d04faf4d150aedd362f34b',
     },
+    x: 'https://x.com/GANGZIIII',
   },
   // StelLive 1기
   {
@@ -42,8 +45,22 @@ export const STEL_SEEDS: SeedCreator[] = [
       url: 'https://chzzk.naver.com/45e71a76e949e16a34764deb962f9d9f',
     },
     gen: 1,
+    x: 'https://x.com/AyatsunoYuni',
   },
-
+{
+    name: '사키하네 후야 SAKIHANE HUYA',
+    youtube: {
+      ucId: 'UC0YQnenKBCu5sGb7H61n6HA',
+      handle: 'Sakihanechannel',
+      url: 'https://www.youtube.com/@Sakihanechannel',
+    },
+    chzzk: {
+      channelId: '36ddb9bb4f17593b60f1b63cec86611d',
+      url: 'https://chzzk.naver.com/36ddb9bb4f17593b60f1b63cec86611d',
+    },
+    gen: 1,
+    x: 'https://x.com/SakihaneHuya',
+  },
   // StelLive 2기
   {
     name: '시라유키 히나 SHIRAYUKI HINA',
@@ -57,6 +74,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       url: 'https://chzzk.naver.com/b044e3a3b9259246bc92e863e7d3f3b8',
     },
     gen: 2,
+    x: 'https://x.com/Shirayukihina_',
   },
   {
     name: '네네코 마시로 NENEKO MASHIRO',
@@ -70,6 +88,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       url: 'https://chzzk.naver.com/4515b179f86b67b4981e16190817c580',
     },
     gen: 2,
+    x: 'https://x.com/NenekoMashiro',
   },
   {
     name: '아카네 리제 AKANE LIZE',
@@ -83,6 +102,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       url: 'https://chzzk.naver.com/4325b1d5bbc321fad3042306646e2e50',
     },
     gen: 2,
+    x: 'https://x.com/AkaneLize',
   },
   {
     name: '아라하시 타비 ARAHASHI TABI',
@@ -96,6 +116,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       url: 'https://chzzk.naver.com/a6c4ddb09cdb160478996007bff35296',
     },
     gen: 2,
+    x: 'https://x.com/ArahashiTabi',
   },
 
   // StelLive 3기
@@ -111,6 +132,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       url: 'https://chzzk.naver.com/64d76089fba26b180d9c9e48a32600d9',
     },
     gen: 3,
+    x: 'https://x.com/TenkoShibuki',
   },
   {
     name: '아오쿠모 린 AOKUMO RIN',
@@ -124,6 +146,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       url: 'https://chzzk.naver.com/516937b5f85cbf2249ce31b0ad046b0f',
     },
     gen: 3,
+    x: 'https://x.com/AokumoRin',
   },
   {
     name: '하나코 나나 HANAKO NANA',
@@ -137,6 +160,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       url: 'https://chzzk.naver.com/4d812b586ff63f8a2946e64fa860bbf5',
     },
     gen: 3,
+    x: 'https://x.com/HanakoNana',
   },
   {
     name: '유즈하 리코 YUZUHA RIKO',
@@ -149,6 +173,7 @@ export const STEL_SEEDS: SeedCreator[] = [
       channelId: '8fd39bb8de623317de90654718638b10',
       url: 'https://chzzk.naver.com/8fd39bb8de623317de90654718638b10',
     },
-    gen: 3,
+    gen: 3, 
+    x: 'https://x.com/YuzuhaRiko',
   },
 ];

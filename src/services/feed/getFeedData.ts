@@ -23,6 +23,8 @@ type PublishedCursorState = { mode: 'cache'; pivot: string | null };
 type RankingCursor = { ordDelta: number; publishedAt: string; id: string };
 type LiveCursor = { liveStateUpdatedAt: string; channelId: string };
 
+const PINNED_LIVE_LIMIT = 11;
+
 type ChannelMeta = {
   id: string;
   platform: 'youtube' | 'chzzk';
@@ -53,9 +55,47 @@ export async function getFeedData(params: FeedParams): Promise<FeedPage> {
     return getLivePage({ supabase, channelIds, params });
   }
 
+  const shouldPrependLive = params.filterType === 'all' && params.sort === 'published' && !params.cursor;
+  let pinnedLiveItems: any[] = [];
+  if (shouldPrependLive) {
+    const liveLimit = Math.min(params.limit, PINNED_LIVE_LIMIT);
+    const livePage = await getLivePage({
+      supabase,
+      channelIds,
+      params: { ...params, filterType: 'live', limit: liveLimit },
+    });
+    pinnedLiveItems = livePage.items;
+  }
+
   // 3) sort 분기
   if (params.sort === 'published') {
-    return getPublishedPage({ supabase, channelIds, params });
+    const pinnedCount = pinnedLiveItems.length;
+    const remainingLimit = Math.max(params.limit - pinnedCount, 0);
+    const needsPublishedItems = remainingLimit > 0;
+    const publishedLimit = needsPublishedItems ? remainingLimit : 1;
+
+    const publishedPage = await getPublishedPage({
+      supabase,
+      channelIds,
+      params: { ...params, limit: publishedLimit },
+    });
+
+    const baseCombined = needsPublishedItems
+      ? [...pinnedLiveItems, ...publishedPage.items]
+      : [...pinnedLiveItems];
+
+    const combinedItems =
+      baseCombined.length > params.limit ? baseCombined.slice(0, params.limit) : baseCombined;
+
+    const hasMore = needsPublishedItems
+      ? publishedPage.hasMore
+      : publishedPage.hasMore || publishedPage.items.length > 0;
+
+    return {
+      items: combinedItems,
+      hasMore,
+      cursor: publishedPage.cursor,
+    };
   }
 
   if (params.sort === 'views_day' || params.sort === 'views_week') {

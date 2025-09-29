@@ -4,9 +4,10 @@ export type CreatorSidebarItem = {
   creatorId: string;
   name: string;
   thumb: string | null;
-  platforms: PlatformType[];
+  platforms: Partial<Record<PlatformType, string>>;
   isLiveNow: boolean;
   channelIds: string[];
+  x?: string | null;
 };
 
 export type ChannelRow = {
@@ -14,7 +15,9 @@ export type ChannelRow = {
   platform: 'youtube' | 'chzzk';
   title: string;
   thumb: string | null;
+  url: string;
   isLiveNow: boolean;
   recentPublishedAt: string | null;
   creatorId: string | null;
+  creatorX?: string | null;
 };
