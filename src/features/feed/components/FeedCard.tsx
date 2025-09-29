@@ -67,11 +67,28 @@ export default function FeedCard({ item, priority }: { item: FeedItem; priority:
       </Link>
 
       <div className="flex gap-3 pt-3">
-        <Link href={item.channel.url} target="_blank">
-          <Avatar className={`size-10 ${isLive ? 'border border-red-600' : ''}`}>
-            <AvatarImage className="object-cover" src={item.channel.thumb || ''} />
+        <Link href={item.channel.url} target="_blank" className="relative">
+          <Avatar className={`size-10 ${isLive ? 'border-2 border-red-600' : ''}`}>
+            <AvatarImage src={item.channel.thumb || ''} asChild={true}>
+              <Image
+                src={item.channel.thumb || ''}
+                alt={`${item.channel.thumb} 프로필 이미지`}
+                width={60}
+                height={60}
+                className="object-cover"
+              />
+            </AvatarImage>
+
             <AvatarFallback>{item.channel.title?.charAt(0)}</AvatarFallback>
           </Avatar>
+          {isLive && (
+            <div className="absolute top-0.5 right-0.5 flex items-center">
+              <div className="relative">
+                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shadow-lg shadow-red-500/50" />
+                <div className="absolute inset-0 w-1.5 h-1.5 bg-red-500 rounded-full animate-ping opacity-75" />
+              </div>
+            </div>
+          )}
         </Link>
 
         <div className="flex flex-col items-start">

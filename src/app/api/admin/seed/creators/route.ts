@@ -77,10 +77,12 @@ export async function POST(req: Request) {
   // 메인 루프
   for (const seed of STEL_SEEDS) {
     const slug = toSlug(seed.name);
+    const desiredXUrl = seed.x ?? null;
     let creatorId: string | null = null;
+    let currentXUrl: string | null | undefined = undefined;
 
     // 1) slug로 조회 → 없으면 name(대소문자 무시)로 조회
-    const bySlug = await supabaseService.from('creators').select('id').eq('slug', slug).maybeSingle();
+    const bySlug = await supabaseService.from('creators').select('id, x_url').eq('slug', slug).maybeSingle();
     if (bySlug.error) {
       errors.push({ step: 'creator', seedName: seed.name, message: bySlug.error.message });
       continue;
@@ -88,9 +90,14 @@ export async function POST(req: Request) {
 
     if (bySlug.data?.id) {
       creatorId = bySlug.data.id;
+      currentXUrl = bySlug.data.x_url ?? null;
       reused.push(creatorId as string);
     } else {
-      const byName = await supabaseService.from('creators').select('id, slug').ilike('name', seed.name).maybeSingle();
+      const byName = await supabaseService
+        .from('creators')
+        .select('id, slug, x_url')
+        .ilike('name', seed.name)
+        .maybeSingle();
       if (byName.error) {
         errors.push({ step: 'creator', seedName: seed.name, message: byName.error.message });
         continue;
@@ -98,14 +105,31 @@ export async function POST(req: Request) {
 
       if (byName.data?.id) {
         creatorId = byName.data.id;
+        currentXUrl = byName.data.x_url ?? null;
         reused.push(creatorId as string);
 
         // slug가 비어있다면 채워줌(드라이런 아님 + slug 다를 때)
-        if (!dryRun && (!byName.data.slug || byName.data.slug !== slug)) {
-          const upd = await supabaseService.from('creators').update({ slug }).eq('id', creatorId);
-          if (upd.error) {
-            errors.push({ step: 'creator', seedName: seed.name, message: upd.error.message });
+        if (!dryRun) {
+          const updatePayload: Record<string, string | null> = {};
+          if (!byName.data.slug || byName.data.slug !== slug) {
+            updatePayload.slug = slug;
           }
+          if (desiredXUrl !== currentXUrl) {
+            updatePayload.x_url = desiredXUrl;
+            currentXUrl = desiredXUrl;
+          }
+
+          if (Object.keys(updatePayload).length) {
+            const upd = await supabaseService.from('creators').update(updatePayload).eq('id', creatorId);
+            if (upd.error) {
+              errors.push({ step: 'creator', seedName: seed.name, message: upd.error.message });
+            }
+          }
+        }
+
+        if (dryRun && desiredXUrl !== currentXUrl) {
+          // dry-run 상태에서도 차이를 알 수 있도록만 기록
+          currentXUrl = desiredXUrl;
         }
       } else {
         // 새로 생성
@@ -117,7 +141,7 @@ export async function POST(req: Request) {
         } else {
           const ins = await supabaseService
             .from('creators')
-            .insert({ name: seed.name, gen: seed.gen ?? null, slug })
+            .insert({ name: seed.name, gen: seed.gen ?? null, slug, x_url: desiredXUrl })
             .select('id')
             .single();
 
@@ -128,7 +152,18 @@ export async function POST(req: Request) {
 
           creatorId = ins.data.id;
           created.push(creatorId as string);
+          currentXUrl = desiredXUrl;
         }
+      }
+    }
+
+    if (!dryRun && creatorId && currentXUrl !== desiredXUrl) {
+      const { error: updateErr } = await supabaseService
+        .from('creators')
+        .update({ x_url: desiredXUrl })
+        .eq('id', creatorId);
+      if (updateErr) {
+        errors.push({ step: 'creator', seedName: seed.name, message: updateErr.message });
       }
     }
 

@@ -7,6 +7,7 @@ export type CreatorSidebarItem = {
   platforms: Partial<Record<PlatformType, string>>;
   isLiveNow: boolean;
   channelIds: string[];
+  x?: string | null;
 };
 
 export type ChannelRow = {
@@ -18,4 +19,5 @@ export type ChannelRow = {
   isLiveNow: boolean;
   recentPublishedAt: string | null;
   creatorId: string | null;
+  creatorX?: string | null;
 };

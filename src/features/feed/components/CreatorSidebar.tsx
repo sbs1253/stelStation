@@ -16,13 +16,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import youtube_icon from '@/assets/icons/youtube_Icon.png';
 import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
+import x_logo_black from '@/assets/icons/x-logo-black.png';
 import Image from 'next/image';
 import { House } from 'lucide-react';
+import { RefreshIcon } from '@/features/feed/components/RefreshButton';
 export default function CreatorSidebar({ className }: { className?: string }) {
-  const { data: channels = [], status } = useChannelsQuery();
+  const { data: channels = [], status, refetch, isRefetching } = useChannelsQuery();
   const creators = useMemo(() => buildCreatorsFromChannels(channels), [channels]);
-  console.log(creators);
-  const { setParams } = useUrlFeedState();
+  const { scope, creatorId, setParams } = useUrlFeedState();
   const selectAll = () => {
     setParams({
       platform: 'all',
@@ -46,52 +47,134 @@ export default function CreatorSidebar({ className }: { className?: string }) {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
-        <SidebarMenu className="gap-2">
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={selectAll} aria-label="전체 크리에이터">
-              <House className="size-4" />
-              <span className="truncate group-data-[collapsible=icon]:hidden">전체 크리에이터</span>
+        <SidebarMenu className="gap-2 mt-4">
+          <SidebarMenuItem className="pl-2">
+            <SidebarMenuButton
+              onClick={selectAll}
+              aria-label="전체 크리에이터"
+              className="cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
+              isActive={scope === 'all'}
+            >
+              <House className="size-4 flex-shrink-0" />
+              <span className="font-bold truncate group-data-[collapsible=icon]:hidden">전체 크리에이터</span>
             </SidebarMenuButton>
+            <SidebarMenuAction
+              aria-label="채널 목록 새로고침"
+              onClick={(event) => {
+                event.stopPropagation();
+                refetch();
+              }}
+              disabled={isRefetching}
+            >
+              <RefreshIcon spinning={isRefetching} className="h-3.5 w-3.5" />
+            </SidebarMenuAction>
           </SidebarMenuItem>
 
           {status === 'pending' && (
             <SidebarMenuItem>
-              <div className="p-2 text-sm text-muted-foreground">로딩 중…</div>
+              <div className="flex flex-col gap-3 p-2">
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-3 rounded-md bg-muted/40 p-2 animate-pulse group-data-[collapsible=icon]:hidden"
+                  >
+                    <div className="size-10 rounded-full bg-muted-foreground/30" />
+                    <div className="flex-1 h-4 rounded bg-muted-foreground/30" />
+                  </div>
+                ))}
+              </div>
             </SidebarMenuItem>
           )}
 
           {status === 'error' && (
             <SidebarMenuItem>
-              <div className="p-2 text-sm text-red-600">채널 목록을 불러오지 못했습니다.</div>
+              <div className="p-2 text-sm text-red-600 group-data-[collapsible=icon]:hidden">
+                채널 목록을 불러오지 못했습니다.
+              </div>
             </SidebarMenuItem>
           )}
           {status === 'success' &&
-            creators.map((c) => (
-              <SidebarMenuItem key={c.creatorId} className="flex place-content-center">
-                <SidebarMenuButton onClick={() => selectCreator(c)} aria-label={c.name} size={'lg'}>
-                  <Avatar className={`size-8 ${c.isLiveNow ? 'ring-2 ring-red-600' : ''}`}>
-                    <AvatarImage className="object-cover" src={c.thumb || ''} />
-                    <AvatarFallback>{c.name?.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div className="ml-2 min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                    <div className="flex items-center">
-                      <span className="truncate">{c.name}</span>
-                      {c.isLiveNow && <span className="text-xs text-red-600">LIVE</span>}
-                    </div>
+            creators.map((c) => {
+              const isActive = scope === 'channels' && creatorId === c.creatorId;
+              return (
+                <SidebarMenuItem key={c.creatorId}>
+                  <SidebarMenuButton
+                    onClick={() => selectCreator(c)}
+                    aria-label={c.name}
+                    className={`h-auto group-data-[collapsible=icon]:min-w-10 
+                      transition-all duration-200 
+                      hover:scale-[1.01] active:scale-[0.99]
+                      ${isActive ? 'border shadow-sm' : 'hover:bg-foreground/10'}`}
+                    isActive={scope === 'channels' && creatorId === c.creatorId}
+                  >
+                    <Link href={c.platforms['chzzk'] ?? ''}>
+                      <Avatar
+                        className={`size-10 group-data-[collapsible=icon]:size-8 flex-shrink-0
+                            transition-all duration-200 
+                            ${c.isLiveNow ? 'border-2 border-red-600' : ''}
+                          }`}
+                      >
+                        <AvatarImage src={c.thumb || ''} asChild={true}>
+                          <Image
+                            src={c.thumb || ''}
+                            alt={`${c.name} 프로필 이미지`}
+                            width={50}
+                            height={50}
+                            className="object-cover"
+                          />
+                        </AvatarImage>
 
-                    {/* 아래줄: 외부 링크들 */}
-                    <div className="mt-1 flex items-center gap-1 opacity-80">
-                      <Link href={c.platforms['youtube'] ?? ''} target="_blank" aria-label="YouTube">
-                        <Image src={youtube_icon} alt="유튜브" width={16} height={16} />
-                      </Link>
-                      <Link href={c.platforms['chzzk'] ?? ''} target="_blank" aria-label="Chzzk">
-                        <Image src={chzzk_icon} alt="치지직" width={14} height={14} />
-                      </Link>
+                        <AvatarFallback>{c.name?.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                    </Link>
+                    <div className="ml-2 min-w-0 flex-1 whitespace-nowrap transition-all duration-300 group-data-[collapsible=icon]:w-0 group-data-[collapsible=icon]:opacity-0">
+                      <div className="flex items-center">
+                        <span className="truncate font-semibold">{c.name}</span>
+                        {c.isLiveNow && (
+                          <span className="ml-1.5 text-xs font-semibold text-red-600 animate-pulse">LIVE</span>
+                        )}
+                      </div>
+
+                      <div className="mt-1 flex items-center gap-1.5 opacity-80">
+                        {c.platforms['youtube'] && (
+                          <Link
+                            href={c.platforms['youtube'] ?? ''}
+                            target="_blank"
+                            aria-label="YouTube"
+                            onClick={(e) => e.stopPropagation()}
+                            className="transition-transform duration-200 hover:scale-110 active:scale-95"
+                          >
+                            <Image src={youtube_icon} alt="유튜브" width={24} height={24} />
+                          </Link>
+                        )}
+                        {c.platforms['chzzk'] && (
+                          <Link
+                            href={c.platforms['chzzk'] ?? ''}
+                            target="_blank"
+                            aria-label="Chzzk"
+                            onClick={(e) => e.stopPropagation()}
+                            className="transition-transform duration-200 hover:scale-110 active:scale-95"
+                          >
+                            <Image src={chzzk_icon} alt="치지직" width={14} height={14} />
+                          </Link>
+                        )}
+                        {c.x && (
+                          <Link
+                            href={c.x}
+                            target="_blank"
+                            aria-label="X"
+                            onClick={(e) => e.stopPropagation()}
+                            className="transition-transform duration-200 hover:scale-110 active:scale-95"
+                          >
+                            <Image src={x_logo_black} alt="X" width={14} height={14} />
+                          </Link>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
         </SidebarMenu>
       </SidebarContent>
     </Sidebar>

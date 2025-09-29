@@ -14,12 +14,16 @@ export function buildCreatorsFromChannels(channels: ChannelRow[]): CreatorSideba
         platforms: {},
         isLiveNow: false,
         channelIds: [],
+        x: ch.creatorX ?? null,
       };
       map.set(ch.creatorId, e);
     }
     e.channelIds.push(ch.id);
     e.platforms[ch.platform as PlatformType] = ch.url;
     if (ch.isLiveNow) e.isLiveNow = true;
+    if (!e.x && ch.creatorX) {
+      e.x = ch.creatorX;
+    }
 
     if (ch.platform === 'chzzk') {
       e.thumb = ch.thumb ?? e.thumb;

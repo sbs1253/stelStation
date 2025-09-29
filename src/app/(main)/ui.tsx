@@ -1,6 +1,5 @@
 'use client';
 
-import CreatorSidebar from '@/features/feed/components/CreatorSidebar';
 import FeedCard from '@/features/feed/components/FeedCard';
 import FeedControls from '@/features/feed/components/FeedControls';
 import { useFeedQuery } from '@/features/feed/hooks/useFeedQuery';
@@ -10,6 +9,7 @@ import { useUrlFeedState } from '@/features/feed/hooks/useUrlFeedState';
 import { useEffect, useRef, useState } from 'react';
 import FeedSkeleton from '@/features/feed/components/FeedSkeleton';
 import FeedError from '@/features/feed/components/FeedError';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 
 export default function Ui() {
   const {
@@ -60,14 +60,18 @@ export default function Ui() {
         className={`flex-1 overflow-y-auto ${isFetching || isNavPending ? 'opacity-70 pointer-events-none' : ''}`}
       >
         <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b ">
-          <FeedControls
-            platform={platform}
-            sort={sort}
-            filterType={filterType}
-            onChange={setParam}
-            pendingPlatform={pendingPlatform}
-            isFetching={isFetching}
-          />
+          <div className="flex">
+            <SidebarTrigger className="relative left-[-5px]" />
+            <FeedControls
+              platform={platform}
+              sort={sort}
+              filterType={filterType}
+              onChange={setParam}
+              pendingPlatform={pendingPlatform}
+              isFetching={isFetching}
+              refetch={refetch}
+            />
+          </div>
         </div>
 
         <div className="p-4">
