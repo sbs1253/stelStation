@@ -41,7 +41,7 @@ export async function getFeedData(params: FeedParams): Promise<FeedPage> {
   const channelIds = await resolveChannelIds({
     supabase,
     scope: params.scope,
-    creatorId: params.creatorId ?? null,
+    
     channelIds: params.channelIds ?? null,
     platform: params.platform,
   });
@@ -108,11 +108,10 @@ export async function getFeedData(params: FeedParams): Promise<FeedPage> {
 async function resolveChannelIds(ctx: {
   supabase: Awaited<ReturnType<typeof createSupabaseServer>>;
   scope: FeedScope;
-  creatorId: string | null;
   channelIds: string[] | null;
   platform: 'all' | 'youtube' | 'chzzk';
 }): Promise<string[]> {
-  const { supabase, scope, creatorId, channelIds, platform } = ctx;
+  const { supabase, scope, channelIds, platform } = ctx;
 
   // scope=channels: 넘겨준 목록 + 플랫폼 필터
   if (scope === 'channels') {

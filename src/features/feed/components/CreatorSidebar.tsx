@@ -22,7 +22,7 @@ import { House } from 'lucide-react';
 import { RefreshIcon } from '@/features/feed/components/RefreshButton';
 import { trackClickOutboundLink, trackRefresh, trackSelectItem } from '@/lib/analytics/events';
 
-export default function CreatorSidebar({ className }: { className?: string }) {
+export default function CreatorSidebar() {
   const { data: channels = [], status, refetch, isRefetching } = useChannelsQuery();
   const creators = useMemo(() => buildCreatorsFromChannels(channels), [channels]);
   const { scope, creatorId, setParams } = useUrlFeedState();
