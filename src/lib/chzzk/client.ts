@@ -23,21 +23,9 @@ type ChzzkOpenChannelsResponse = {
   content?: { data?: ChzzkOpenChannel[] };
 };
 
-// 내부 Service API (채널 정보) 타입을 더 상세하게 정의
-type ChzzkServiceChannel = {
-  channelId: string;
-  channelName: string;
-  channelImageUrl: string | null;
-  channelDescription: string;
-  followerCount: number;
-  openLive: boolean;
-};
 
-type ChzzkServiceChannelResponse = {
-  code: number;
-  message: string | null;
-  content?: ChzzkServiceChannel;
-};
+
+
 
 // 내부 Service API (비디오 목록) 응답 타입
 type ChzzkServiceVideoItem = {

@@ -144,7 +144,7 @@ export async function POST(request: Request) {
   }
 
   const now = new Date();
-  const nowISO = now.toISOString();
+  
 
   // 3) 쿨타임 체크 (recent 전용 / force면 무시)
   if (!body.force && body.mode === 'recent' && channelRecord.sync_cooldown_until) {

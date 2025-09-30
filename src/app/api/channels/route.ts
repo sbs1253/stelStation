@@ -10,7 +10,7 @@ type ChannelListCursor = { recent_published_at: string | null; channel_id: strin
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const isDebug = url.searchParams.get('debug') === '1';
+  
 
   let query;
   try {
