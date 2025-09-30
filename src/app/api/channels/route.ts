@@ -96,7 +96,10 @@ export async function GET(request: Request) {
   return NextResponse.json({ items, hasMore, cursor: nextCursor });
 }
 
-const ADMIN_SECRET = process.env.CRON_SECRET ?? '';
+const ADMIN_SECRET = process.env.CRON_SECRET;
+if (!ADMIN_SECRET) {
+  throw new Error('CRON_SECRET is not configured');
+}
 const CreateChannelSchema = z.object({
   platform: z.enum(['youtube', 'chzzk']),
   platformChannelId: z.string().min(1),
@@ -104,7 +107,7 @@ const CreateChannelSchema = z.object({
   thumbnailUrl: z.string().optional(),
 });
 export async function POST(req: Request) {
-  if ((req.headers.get('x-cron-secret') ?? '') !== ADMIN_SECRET) {
+  if (req.headers.get('x-cron-secret') !== ADMIN_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   let body: z.infer<typeof CreateChannelSchema>;

@@ -41,7 +41,6 @@ export async function getFeedData(params: FeedParams): Promise<FeedPage> {
   const channelIds = await resolveChannelIds({
     supabase,
     scope: params.scope,
-    
     channelIds: params.channelIds ?? null,
     platform: params.platform,
   });

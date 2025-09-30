@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState, useTransition } from 'react';
 import type { ContentFilterType, PlatformType, FeedScope, SortType } from '@/features/feed/types';
 import { ALLOWED_CONTENT_BY_PLATFORM } from '@/features/feed/types';
 
@@ -31,7 +31,8 @@ export function useUrlFeedState() {
   const [pendingPlatform, setPendingPlatform] = useState<PlatformType | null>(null);
 
   // 현재 URL 상태 파싱
-  const scope = ((sp.get('scope') ?? 'all') as FeedScope) || 'all';
+  const scopeParam = sp.get('scope');
+  const scope = ((scopeParam === 'creator' ? 'channels' : scopeParam) ?? 'all') as FeedScope;
   const creatorId = sp.get('creatorId') ?? null;
   const channelIds = sp.getAll('channelIds') ?? [];
   const platform = (sp.get('platform') ?? 'all') as PlatformType;
@@ -41,12 +42,15 @@ export function useUrlFeedState() {
   const allowed = ALLOWED_CONTENT_BY_PLATFORM[platform];
   const filterType = (allowed.includes(rawType) ? rawType : 'all') as ContentFilterType;
 
-  const commit = (next: URLSearchParams) => {
-    if (next.toString() === sp.toString()) return;
-    startTransition(() => {
-      router.replace(next.size ? `${pathname}?${next.toString()}` : pathname);
-    });
-  };
+  const commit = useCallback(
+    (next: URLSearchParams) => {
+      if (next.toString() === sp.toString()) return;
+      startTransition(() => {
+        router.replace(next.size ? `${pathname}?${next.toString()}` : pathname);
+      });
+    },
+    [pathname, router, sp, startTransition]
+  );
 
   const setParams = (updates: UrlUpdate) => {
     const next = new URLSearchParams(sp.toString());
@@ -83,12 +87,12 @@ export function useUrlFeedState() {
   };
 
   useEffect(() => {
-    if (!allowed.includes(rawType)) {
+    if (rawType !== filterType) {
       const next = new URLSearchParams(sp.toString());
       next.delete('filterType');
       commit(next);
     }
-  }, []);
+  }, [commit, filterType, rawType, sp]);
 
   useEffect(() => {
     if (pendingPlatform && platform === pendingPlatform) setPendingPlatform(null);

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DEFAULT_LIMIT, MAX_LIMIT } from '@/lib/config/constants';
 const FeedQuerySchema = z.object({
-  scope: z.enum(['all', 'creator', 'channels']).default('all'),
+  scope: z.enum(['all', 'channels']).default('all'),
   creatorId: z.string().optional(),
   channelIds: z.array(z.string()).optional(),
 
@@ -41,8 +41,11 @@ export function parseFeedQueryFromURL(url: URL) {
   const uniqueIds = Array.from(new Set(rawIds));
   const channelIds = uniqueIds.length ? uniqueIds : undefined;
 
+  const rawScope = sp.get('scope');
+  const normalizedScope = rawScope === 'creator' ? 'channels' : rawScope || undefined;
+
   const obj = {
-    scope: (sp.get('scope') as any) || undefined,
+    scope: normalizedScope as any,
     creatorId: sp.get('creatorId') ?? undefined,
     channelIds,
 

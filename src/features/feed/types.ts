@@ -1,7 +1,7 @@
 export type PlatformType = 'all' | 'youtube' | 'chzzk';
 export type SortType = 'published' | 'views_day' | 'views_week';
 export type ContentFilterType = 'all' | 'video' | 'short' | 'live' | 'vod';
-export type FeedScope = 'all' | 'creator' | 'channels';
+export type FeedScope = 'all' | 'channels';
 
 export type FeedItem = {
   videoId: string;

@@ -9,11 +9,15 @@ import {
   getChzzkVideosPage,
   mapChzzkVideoToCacheRow,
 } from '@/lib/chzzk/client';
+
+const CRON_SECRET = process.env.CRON_SECRET;
+if (!CRON_SECRET) {
+  throw new Error('CRON_SECRET is not configured');
+}
+
 /** 내부 보호: 헤더 시크릿 확인 */
 function requireCronSecret(req: Request) {
-  const provided = req.headers.get('x-cron-secret') ?? '';
-  const expected = process.env.CRON_SECRET ?? '';
-  return provided && expected && provided === expected;
+  return req.headers.get('x-cron-secret') === CRON_SECRET;
 }
 
 /** 현재 시각(KST) */

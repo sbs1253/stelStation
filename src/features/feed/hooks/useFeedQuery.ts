@@ -29,7 +29,6 @@ export function useFeedQuery(params: {
         limit: pageSize.toString(),
       });
 
-      if (scope === 'creator' && creatorId) qs.set('creatorId', creatorId);
       if (scope === 'channels' && channelIds?.length) {
         Array.from(new Set(channelIds))
           .sort()

@@ -19,10 +19,6 @@ export const feedKeys = {
     };
     base.platform = p.platform;
 
-    if (scope === 'creator' && p.creatorId) {
-      base.creatorId = p.creatorId;
-    }
-
     if (scope === 'channels' && p.channelIds?.length) {
       base.channelIds = Array.from(new Set(p.channelIds)).sort();
     }

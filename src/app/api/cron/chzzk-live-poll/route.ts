@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';
 import { getChzzkLiveStatus } from '@/lib/chzzk/client';
 
-const CRON_SECRET = process.env.CRON_SECRET!;
+const CRON_SECRET = process.env.CRON_SECRET;
+if (!CRON_SECRET) {
+  throw new Error('CRON_SECRET is not configured');
+}
 
 // 기본 튜닝값(쿼리 파라미터로 오버라이드 가능)
 const DEFAULT_CONCURRENCY = 4; // chzzk는 무료 폴링이라 3~6 권장
@@ -21,7 +24,7 @@ type ChzzkChannelRow = {
 
 export async function POST(request: Request) {
   // 0) 내부 보호
-  if ((request.headers.get('x-cron-secret') ?? '') !== CRON_SECRET) {
+  if (request.headers.get('x-cron-secret') !== CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
