@@ -6,7 +6,7 @@ import { useFeedQuery } from '@/features/feed/hooks/useFeedQuery';
 import { getFeedPageSize } from '@/features/feed/utils/pageSize';
 import { useInfiniteSentinel } from '@/features/feed/hooks/useInfiniteSentinel';
 import { useUrlFeedState } from '@/features/feed/hooks/useUrlFeedState';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import FeedSkeleton from '@/features/feed/components/FeedSkeleton';
 import FeedError from '@/features/feed/components/FeedError';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -22,12 +22,10 @@ export default function Ui() {
     pendingPlatform,
     isNavPending,
     setParam,
-    setParams,
   } = useUrlFeedState();
   const {
     data: items = [],
     status,
-    error,
     fetchNextPage,
     hasNextPage,
     isFetching,

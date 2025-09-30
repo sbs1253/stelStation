@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     try {
       const rawText = await req.text(); // 빈 본문이어도 예외가 나지 않음
       parsedJson = rawText ? JSON.parse(rawText) : {};
-    } catch (e) {
+    } catch {
       return NextResponse.json({ error: 'Invalid body', details: 'Malformed JSON' }, { status: 400 });
     }
     const result = BodySchema.safeParse(parsedJson);
