@@ -5,7 +5,11 @@ import { supabaseService } from '@/lib/supabase/service';
 const DEFAULT_CONCURRENCY = 3; // 동시에 처리할 채널 개수
 const DEFAULT_BATCH_DELAY_MS = 400; // 배치 간 대기(ms)
 
-const CRON_SECRET = process.env.CRON_SECRET!;
+const CRON_SECRET: string = (() => {
+  const value = process.env.CRON_SECRET;
+  if (!value) throw new Error('CRON_SECRET is not configured');
+  return value;
+})();
 
 // 배치 사이 지연용
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -13,7 +17,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function POST(request: Request) {
   /** 0) 내부 인증 확인 */
   const receivedSecret = request.headers.get('x-cron-secret');
-  if (!CRON_SECRET || receivedSecret !== CRON_SECRET) {
+  if (receivedSecret !== CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

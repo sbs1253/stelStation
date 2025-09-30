@@ -2,14 +2,17 @@ import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';
 import { HYDRATION_TTL_HOURS } from '@/lib/config/constants';
 
-const CRON_SECRET = process.env.CRON_SECRET!;
+const CRON_SECRET = process.env.CRON_SECRET;
+if (!CRON_SECRET) {
+  throw new Error('CRON_SECRET is not configured');
+}
 
 export async function POST(req: Request) {
   // 실행 메타: 시작 시각 기록
   const startedAt = new Date();
 
   // 0) 내부 보호
-  if ((req.headers.get('x-cron-secret') ?? '') !== CRON_SECRET) {
+  if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

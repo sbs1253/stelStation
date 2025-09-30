@@ -2,13 +2,16 @@ import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';
 import { STEL_SEEDS } from '@/lib/config/seeds';
 
-const ADMIN_SECRET = process.env.CRON_SECRET ?? '';
+const ADMIN_SECRET = process.env.CRON_SECRET;
+if (!ADMIN_SECRET) {
+  throw new Error('CRON_SECRET is not configured');
+}
 const CONCURRENCY = 3;
 const BATCH_DELAY_MS = 300;
 
 export async function POST(req: Request) {
   // ── 보안: 내부 호출만 허용 ─────────────────────────────────────────────────────
-  if ((req.headers.get('x-cron-secret') ?? '') !== ADMIN_SECRET) {
+  if (req.headers.get('x-cron-secret') !== ADMIN_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

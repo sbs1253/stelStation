@@ -12,17 +12,8 @@ import FeedError from '@/features/feed/components/FeedError';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
 export default function Ui() {
-  const {
-    scope,
-    creatorId,
-    channelIds,
-    platform,
-    sort,
-    filterType,
-    pendingPlatform,
-    isNavPending,
-    setParam,
-  } = useUrlFeedState();
+  const { scope, creatorId, channelIds, platform, sort, filterType, pendingPlatform, isNavPending, setParam } =
+    useUrlFeedState();
   const {
     data: items = [],
     status,
@@ -39,15 +30,16 @@ export default function Ui() {
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
-    rootMargin: '100px 0px',
+    rootMargin: '10px 0px',
     threshold: 0,
     delay: 500,
   });
   const mainRef = useRef<HTMLDivElement>(null);
+  const channelKey = channelIds.length ? channelIds.join(',') : '';
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [platform, sort, filterType]);
+  }, [platform, sort, filterType, scope, creatorId, channelKey]);
 
   return (
     <div className="flex w-full h-screen min-h-0">

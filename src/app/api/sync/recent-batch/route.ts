@@ -3,7 +3,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabaseService } from '@/lib/supabase/service';
 
-const CRON_SECRET = process.env.CRON_SECRET ?? '';
+const CRON_SECRET: string = (() => {
+  const value = process.env.CRON_SECRET;
+  if (!value) throw new Error('CRON_SECRET is not configured');
+  return value;
+})();
 
 // 기본 동시성/배치 간격(쿼리로 오버라이드 가능)
 const DEFAULT_CONCURRENCY = 2;
@@ -19,7 +23,7 @@ const BodySchema = z.object({
 // 라우트 핸들러
 export async function POST(req: Request) {
   // 0) 내부 보호
-  if ((req.headers.get('x-cron-secret') ?? '') !== CRON_SECRET) {
+  if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

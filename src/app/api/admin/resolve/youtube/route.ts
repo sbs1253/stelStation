@@ -3,7 +3,11 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-const ADMIN_SECRET = process.env.CRON_SECRET ?? '';
+const ADMIN_SECRET = process.env.CRON_SECRET;
+if (!ADMIN_SECRET) {
+  throw new Error('CRON_SECRET is not configured');
+}
+
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY ?? '';
 
 const RequestBodySchema = z.object({
@@ -47,7 +51,7 @@ async function youtubeFetchJson<T>(url: string): Promise<T> {
 
 // --- 핵심 로직 ---
 export async function POST(req: Request) {
-  if ((req.headers.get('x-cron-secret') ?? '') !== ADMIN_SECRET) {
+  if (req.headers.get('x-cron-secret') !== ADMIN_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

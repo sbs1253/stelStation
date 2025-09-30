@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';
 import { STEL_SEEDS } from '@/lib/config/seeds';
 
-const ADMIN_SECRET = process.env.CRON_SECRET ?? '';
+const ADMIN_SECRET = process.env.CRON_SECRET;
+if (!ADMIN_SECRET) {
+  throw new Error('CRON_SECRET is not configured');
+}
 
 async function linkChannel(
   creatorId: string,
@@ -58,7 +61,7 @@ function toSlug(name: string) {
 
 export async function POST(req: Request) {
   // 내부 보호
-  if ((req.headers.get('x-cron-secret') ?? '') !== ADMIN_SECRET) {
+  if (req.headers.get('x-cron-secret') !== ADMIN_SECRET) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
