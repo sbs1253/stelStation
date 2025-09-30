@@ -48,6 +48,7 @@ export default function FeedCard({ item, priority }: { item: FeedItem; priority:
             sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             loading={priority ? 'eager' : 'lazy'}
+            quality={75}
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-xs text-gray-500">썸네일 없음</div>
