@@ -36,12 +36,17 @@ export default function ContentTypeFilter({ value, onChange, platform, isMobile,
   const selected = options.find((o) => o.value === value);
   const SelectedIcon = selected?.icon;
 
+  const handleValueChange = (next: string) => {
+    if (!next) return;
+    onChange(next as ContentFilterType);
+  };
+
   if (isMobile) {
     return (
       <ToggleGroup
         type="single"
         value={value}
-        onValueChange={(v) => v && onChange(v as ContentFilterType)}
+        onValueChange={handleValueChange}
         className="flex flex-wrap gap-3"
       >
         {options.map((opt) => (
@@ -51,7 +56,6 @@ export default function ContentTypeFilter({ value, onChange, platform, isMobile,
             disabled={disabled}
             className="flex items-center gap-2 px-4 py-2.5 rounded-full font-medium transition-all duration-200 shadow-sm data-[state=on]:bg-gray-900 data-[state=on]:text-white data-[state=on]:shadow-lg"
           >
-            <opt.icon className={`h-4 w-4 ${value !== opt.value ? 'text-muted-foreground' : ''}`} />
             <span>{opt.label}</span>
           </ToggleGroupItem>
         ))}
@@ -73,11 +77,15 @@ export default function ContentTypeFilter({ value, onChange, platform, isMobile,
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-48">
-        <DropdownMenuRadioGroup value={value} onValueChange={(v) => v && onChange(v as ContentFilterType)}>
+        <DropdownMenuRadioGroup value={value} onValueChange={handleValueChange}>
           {options.map((opt) => {
             const Icon = opt.icon;
             return (
-              <DropdownMenuRadioItem key={opt.value} value={opt.value} className="gap-2">
+              <DropdownMenuRadioItem
+                key={opt.value}
+                value={opt.value}
+                className="gap-2"
+              >
                 <Icon className="w-4 h-4 text-muted-foreground" />
                 <span>{opt.label}</span>
               </DropdownMenuRadioItem>

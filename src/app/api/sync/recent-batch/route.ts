@@ -1,4 +1,3 @@
-// src/app/api/sync/recent-batch/route.ts
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';

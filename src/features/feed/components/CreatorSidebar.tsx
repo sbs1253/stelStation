@@ -20,6 +20,8 @@ import x_logo_black from '@/assets/icons/x-logo-black.png';
 import Image from 'next/image';
 import { House } from 'lucide-react';
 import { RefreshIcon } from '@/features/feed/components/RefreshButton';
+import { trackClickOutboundLink, trackRefresh, trackSelectItem } from '@/lib/analytics/events';
+
 export default function CreatorSidebar({ className }: { className?: string }) {
   const { data: channels = [], status, refetch, isRefetching } = useChannelsQuery();
   const creators = useMemo(() => buildCreatorsFromChannels(channels), [channels]);
@@ -60,9 +62,10 @@ export default function CreatorSidebar({ className }: { className?: string }) {
             </SidebarMenuButton>
             <SidebarMenuAction
               aria-label="채널 목록 새로고침"
-              onClick={(event) => {
-                event.stopPropagation();
+              onClick={(e) => {
+                e.stopPropagation();
                 refetch();
+                trackRefresh({ location: 'sidebar' });
               }}
               disabled={isRefetching}
             >
@@ -99,7 +102,10 @@ export default function CreatorSidebar({ className }: { className?: string }) {
               return (
                 <SidebarMenuItem key={c.creatorId}>
                   <SidebarMenuButton
-                    onClick={() => selectCreator(c)}
+                    onClick={() => {
+                      selectCreator(c);
+                      trackSelectItem({ item_id: c.creatorId, item_name: c.name, item_list_name: 'sidebar' });
+                    }}
                     aria-label={c.name}
                     className={`h-auto group-data-[collapsible=icon]:min-w-10 
                       transition-all duration-200 
@@ -107,12 +113,24 @@ export default function CreatorSidebar({ className }: { className?: string }) {
                       ${isActive ? 'border shadow-sm' : 'hover:bg-foreground/10'}`}
                     isActive={scope === 'channels' && creatorId === c.creatorId}
                   >
-                    <Link href={c.platforms['chzzk'] ?? ''}>
+                    <Link
+                      href={c.platforms['chzzk'] ?? ''}
+                      target="_blank"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        trackSelectItem({
+                          item_id: c.creatorId,
+                          item_name: c.name,
+                          platform: 'chzzk',
+                          item_list_name: 'sidebar_avatar',
+                        });
+                      }}
+                    >
                       <Avatar
                         className={`size-10 group-data-[collapsible=icon]:size-8 flex-shrink-0
                             transition-all duration-200 
                             ${c.isLiveNow ? 'border-2 border-red-600' : ''}
-                          }`}
+                          `}
                       >
                         <AvatarImage src={c.thumb || ''} asChild={true}>
                           <Image
@@ -141,7 +159,15 @@ export default function CreatorSidebar({ className }: { className?: string }) {
                             href={c.platforms['youtube'] ?? ''}
                             target="_blank"
                             aria-label="YouTube"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              trackClickOutboundLink({
+                                creator_id: c.creatorId,
+                                creator_name: c.name,
+                                platform: 'youtube',
+                                location: 'sidebar',
+                              });
+                            }}
                             className="transition-transform duration-200 hover:scale-110 active:scale-95"
                           >
                             <Image src={youtube_icon} alt="유튜브" width={24} height={24} />
@@ -152,7 +178,15 @@ export default function CreatorSidebar({ className }: { className?: string }) {
                             href={c.platforms['chzzk'] ?? ''}
                             target="_blank"
                             aria-label="Chzzk"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              trackClickOutboundLink({
+                                creator_id: c.creatorId,
+                                creator_name: c.name,
+                                platform: 'chzzk',
+                                location: 'sidebar',
+                              });
+                            }}
                             className="transition-transform duration-200 hover:scale-110 active:scale-95"
                           >
                             <Image src={chzzk_icon} alt="치지직" width={14} height={14} />
@@ -163,7 +197,15 @@ export default function CreatorSidebar({ className }: { className?: string }) {
                             href={c.x}
                             target="_blank"
                             aria-label="X"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              trackClickOutboundLink({
+                                creator_id: c.creatorId,
+                                creator_name: c.name,
+                                platform: 'x',
+                                location: 'sidebar',
+                              });
+                            }}
                             className="transition-transform duration-200 hover:scale-110 active:scale-95"
                           >
                             <Image src={x_logo_black} alt="X" width={14} height={14} />

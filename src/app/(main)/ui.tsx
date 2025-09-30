@@ -53,8 +53,6 @@ export default function Ui() {
 
   return (
     <div className="flex w-full h-screen min-h-0">
-      {/* <CreatorSidebar className="flex-shrink-0" /> */}
-
       <main
         ref={mainRef}
         className={`flex-1 overflow-y-auto ${isFetching || isNavPending ? 'opacity-70 pointer-events-none' : ''}`}

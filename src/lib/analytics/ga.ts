@@ -1,4 +1,3 @@
-// src/lib/analytics/ga.ts
 export function getGaId(): string | undefined {
   return process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 }

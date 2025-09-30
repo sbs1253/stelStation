@@ -1,4 +1,3 @@
-// src/app/actions/sync.ts
 'use server';
 
 export async function refreshChannelAction(channelId: string, mode: 'recent' | 'full' = 'recent') {
