@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   const cutoff = Date.now() - staleMin * 60_000;
   let targets = (channels ?? []).filter((c) => {
     const last = c.live_state_updated_at ? new Date(c.live_state_updated_at).getTime() : 0;
-    return last < cutoff; // 오래된 것만
+    return last <= cutoff; // 오래된 것만 (임계값 포함)
   });
 
   if (limit && Number.isFinite(limit)) {

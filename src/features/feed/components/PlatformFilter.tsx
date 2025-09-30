@@ -41,7 +41,10 @@ export default function PlatformFilter({ value, onChange, disabled }: Props) {
       <ToggleGroup
         type="single"
         value={value}
-        onValueChange={(v) => v && onChange(v as PlatformType)}
+        onValueChange={(v) => {
+          if (!v) return;
+          onChange(v as PlatformType);
+        }}
         className="flex gap-3"
       >
         {PLATFORM_OPTIONS.map((opt) => (

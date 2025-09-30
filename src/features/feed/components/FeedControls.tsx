@@ -3,9 +3,9 @@
 import PlatformFilter from '@/features/feed/components/PlatformFilter';
 import ResponsiveFilter from '@/features/feed/components/ResponsiveFilter';
 import type { ContentFilterType, PlatformType } from '../../feed/types';
-import { RefreshButton } from '@/features/feed/components/RefreshButton';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
+import { trackChangeFilter, trackChangeTab, trackRefresh } from '@/lib/analytics/events';
 
 type Props = {
   platform: PlatformType;
@@ -26,22 +26,56 @@ export default function FeedControls({
   isFetching,
   refetch,
 }: Props) {
+  const currentPlatform = pendingPlatform ?? platform;
+
+  const handlePlatformChange = (next: PlatformType) => {
+    if (!next) return;
+    if (next === currentPlatform) return;
+    trackChangeTab({ platform: next });
+    onChange('platform', next);
+  };
+
+  const handleSortChange = (next: typeof sort) => {
+    if (!next) return;
+    if (next !== sort) {
+      trackChangeFilter({ filter_name: 'sort', filter_value: next });
+      onChange('sort', next);
+    }
+  };
+
+  const handleFilterTypeChange = (next: ContentFilterType) => {
+    if (!next) return;
+    if (next !== filterType) {
+      trackChangeFilter({ filter_name: 'contentType', filter_value: next });
+      onChange('filterType', next);
+    }
+  };
+
   return (
     <div className="flex flex-col items-start gap-4 w-full min-w-0">
       <PlatformFilter
-        value={pendingPlatform ?? platform}
-        onChange={(v) => onChange('platform', v)}
+        value={currentPlatform}
+        onChange={handlePlatformChange}
         disabled={isFetching}
       />
       <div className="flex place-items-center gap-4">
         <ResponsiveFilter
           sortFilter={sort}
-          onSortFilterChange={(v) => onChange('sort', v)}
+          onSortFilterChange={handleSortChange}
           videoType={filterType}
-          onVideoTypeChange={(v) => onChange('filterType', v)}
+          onVideoTypeChange={handleFilterTypeChange}
           platform={platform}
         />
-        <Button type="button" variant="default" size="sm" onClick={() => refetch()} disabled={isFetching}>
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          onClick={() => {
+            refetch();
+            trackRefresh({ location: 'feed' });
+          }}
+          disabled={isFetching}
+        >
           <RefreshCw className={` ${isFetching ? 'animate-spin' : ''}`} />
         </Button>
       </div>

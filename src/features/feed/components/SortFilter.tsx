@@ -19,12 +19,17 @@ export default function SortFilter({
   onChange: (v: SortType) => void;
   disabled?: boolean;
 }) {
+  const handleValueChange = (next: string) => {
+    if (!next) return;
+    onChange(next as SortType);
+  };
+
   return (
     <div>
       <ToggleGroup
         type="single"
         value={value}
-        onValueChange={(v) => v && onChange(v as SortType)}
+        onValueChange={handleValueChange}
         className="flex flex-wrap gap-3"
       >
         {SORT_OPTIONS.map((opt) => (

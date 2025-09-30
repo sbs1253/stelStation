@@ -8,6 +8,7 @@ import chzzk_icon from '@/assets/icons/chzzk_Icon.png';
 import { formatDuration } from '@/lib/time/duration';
 import { formatKSTFriendlyDate, formatKSTLiveTime } from '@/lib/time/kst';
 import type { FeedItem } from '../../feed/types';
+import { trackSelectContent, trackSelectItem } from '@/lib/analytics/events';
 
 function compact(n?: number | null) {
   if (n == null) return '';
@@ -30,6 +31,14 @@ export default function FeedCard({ item, priority }: { item: FeedItem; priority:
         href={item.url}
         target="_blank"
         className="relative block w-full aspect-video overflow-hidden rounded-md group bg-gray-200"
+        onClick={() =>
+          trackSelectContent({
+            item_id: item.videoId,
+            content_type: item.contentType,
+            item_name: item.title,
+            platform: item.platform,
+          })
+        }
       >
         {thumbnailUrl ? (
           <Image
@@ -67,7 +76,20 @@ export default function FeedCard({ item, priority }: { item: FeedItem; priority:
       </Link>
 
       <div className="flex gap-3 pt-3">
-        <Link href={item.channel.url} target="_blank" className="relative">
+        <Link
+          href={item.channel.url}
+          target="_blank"
+          className="relative"
+          onClick={(e) => {
+            e.stopPropagation();
+            trackSelectItem({
+              item_id: item.channel.id,
+              item_name: item.channel.title,
+              platform: item.platform,
+              item_list_name: 'feed_avatar',
+            });
+          }}
+        >
           <Avatar className={`size-10 ${isLive ? 'border-2 border-red-600' : ''}`}>
             <AvatarImage src={item.channel.thumb || ''} asChild={true}>
               <Image
@@ -92,7 +114,19 @@ export default function FeedCard({ item, priority }: { item: FeedItem; priority:
         </Link>
 
         <div className="flex flex-col items-start">
-          <Link href={item.url} target="_blank">
+          <Link
+            href={item.url}
+            target="_blank"
+            onClick={(e) => {
+              e.stopPropagation();
+              trackSelectItem({
+                item_id: item.videoId,
+                item_name: item.title,
+                platform: item.platform,
+                item_list_name: 'feed_channel_title',
+              });
+            }}
+          >
             <h4 className="font-bold leading-snug line-clamp-2">{item.title}</h4>
           </Link>
           <Link href={item.channel.url} className="hover:underline" target="_blank">

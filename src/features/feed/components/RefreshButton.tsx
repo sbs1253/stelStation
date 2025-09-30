@@ -14,26 +14,3 @@ export type RefreshButtonProps = ComponentProps<typeof Button> & {
   label?: string;
   hideLabelOnMobile?: boolean;
 };
-
-export function RefreshButton({
-  loading = false,
-  label = '새로고침',
-  hideLabelOnMobile = false,
-  className,
-  disabled,
-  children,
-  ...props
-}: RefreshButtonProps) {
-  const showLabel = label && label.length > 0;
-  return (
-    <Button
-      {...props}
-      disabled={disabled || loading}
-      className={className}
-    >
-      <RefreshIcon spinning={loading} className={cn(showLabel && (hideLabelOnMobile ? 'sm:mr-2' : 'mr-2'))} />
-      {showLabel ? <span className={hideLabelOnMobile ? 'hidden sm:inline' : undefined}>{label}</span> : null}
-      {children}
-    </Button>
-  );
-}
