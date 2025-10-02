@@ -50,14 +50,17 @@ async function linkChannel(
   return { status: 'linked', channelId };
 }
 
-/** 크리에이터 slug 생성: 소문자-하이픈, 영숫자/언더스코어만, 최대 60자 */
+/** 크리에이터 slug 생성 최대 60자 */
 function toSlug(name: string) {
   return name
     .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w-]+/g, '')
+    .replace(/\s+/g, '-')        // 공백 → 하이픈
+    .replace(/[^\w-]+/g, '')     // 영문/숫자/하이픈만 유지
+    .replace(/-+/g, '-')         // 연속 하이픈 하나로
+    .replace(/^-+|-+$/g, '')     // 앞뒤 하이픈 제거
     .slice(0, 60);
 }
+
 
 export async function POST(req: Request) {
   // 내부 보호

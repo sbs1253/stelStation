@@ -49,31 +49,32 @@ export async function GET(request: Request) {
   if (creatorIds.length) {
     const { data, error: creatorErr } = await supabaseService
       .from('creators')
-      .select('id, x_url')
+      .select('id, x_url, slug')
       .in('id', creatorIds);
     if (creatorErr) {
       return NextResponse.json({ error: 'DB error', details: creatorErr.message }, { status: 500 });
     }
     creatorRows = data ?? [];
   }
-  const xUrlByCreator: Record<string, string | null> = creatorRows.reduce(
-    (acc: Record<string, string | null>, row: any) => {
-      acc[row.id] = row.x_url ?? null;
+  const creatorMeta: Record<string, { x: string | null; slug: string | null }> = creatorRows.reduce(
+    (acc: Record<string, { x: string | null; slug: string | null }>, row: any) => {
+      acc[row.id] = { x: row.x_url ?? null, slug: row.slug ?? null };
       return acc;
     },
     {}
   );
-  const creatorByChannel: Record<string, { id: string; x: string | null }> = (ccRows ?? []).reduce(
-    (acc: Record<string, { id: string; x: string | null }>, r: any) => {
+  const creatorByChannel: Record<string, { id: string; x: string | null; slug: string | null }> = (ccRows ?? []).reduce(
+    (acc: Record<string, { id: string; x: string | null; slug: string | null }>, r: any) => {
+      const meta = creatorMeta[r.creator_id] ?? { x: null, slug: null };
       acc[r.channel_id] = {
         id: r.creator_id,
-        x: xUrlByCreator[r.creator_id] ?? null,
+        x: meta.x,
+        slug: meta.slug,
       };
       return acc;
     },
     {}
   );
-
   const items = rows.map((row: any) => {
     const base = mapChannelRowToItem(row);
     const meta = creatorByChannel[row.channel_id];
@@ -81,6 +82,7 @@ export async function GET(request: Request) {
       ...base,
       creatorId: meta?.id ?? null,
       creatorX: meta?.x ?? null,
+      creatorSlug: meta?.slug ?? null,
     };
   });
 

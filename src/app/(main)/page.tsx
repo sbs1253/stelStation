@@ -4,10 +4,32 @@ import { headers } from 'next/headers';
 import { feedKeys } from '@/features/feed/utils/feedKeys';
 import { getFeedPageSize } from '@/features/feed/utils/pageSize';
 import { parseFeedQueryFromURL } from '@/lib/validations/feed';
+import type { Metadata } from 'next';
 
 export const revalidate = 0;
 
 type SP = Record<string, string | string[] | undefined>;
+
+export async function generateMetadata(): Promise<Metadata> {
+  const title = 'StelStation – 방송 피드';
+  const description =
+    'StelStation은 스텔라이브 공식 서비스가 아닌 팬이 만든 비공식 통합 플랫폼입니다. 최신 방송과 영상을 한곳에서 확인하세요.';
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+    },
+    twitter: {
+      title,
+      description,
+      card: 'summary_large_image',
+    },
+  };
+}
 
 export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
