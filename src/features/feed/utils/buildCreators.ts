@@ -4,7 +4,7 @@ import { PlatformType } from '@/features/feed/types';
 export function buildCreatorsFromChannels(channels: ChannelRow[]): CreatorSidebarItem[] {
   const map = new Map<string, CreatorSidebarItem>();
   for (const ch of channels) {
-    if (!ch.creatorId) continue; 
+    if (!ch.creatorId) continue;
     let e = map.get(ch.creatorId);
     if (!e) {
       e = {
@@ -15,6 +15,7 @@ export function buildCreatorsFromChannels(channels: ChannelRow[]): CreatorSideba
         isLiveNow: false,
         channelIds: [],
         x: ch.creatorX ?? null,
+        slug: ch.creatorSlug ?? null,
       };
       map.set(ch.creatorId, e);
     }
@@ -28,6 +29,9 @@ export function buildCreatorsFromChannels(channels: ChannelRow[]): CreatorSideba
     if (ch.platform === 'chzzk') {
       e.thumb = ch.thumb ?? e.thumb;
       e.name = ch.title ?? e.name;
+    }
+    if (!e.slug && ch.creatorSlug) {
+      e.slug = ch.creatorSlug;
     }
   }
 

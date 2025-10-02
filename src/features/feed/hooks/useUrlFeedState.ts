@@ -22,7 +22,11 @@ const DEFAULTS = {
   creatorId: '',
 };
 
-export function useUrlFeedState() {
+export function useUrlFeedState(defaults?: {
+  scope?: FeedScope;
+  creatorId?: string | null;
+  channelIds?: string[] | null;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -32,9 +36,11 @@ export function useUrlFeedState() {
 
   // 현재 URL 상태 파싱
   const scopeParam = sp.get('scope');
-  const scope = ((scopeParam === 'creator' ? 'channels' : scopeParam) ?? 'all') as FeedScope;
-  const creatorId = sp.get('creatorId') ?? null;
-  const channelIds = sp.getAll('channelIds') ?? [];
+  const resolvedScopeParam = scopeParam === 'creator' ? 'channels' : scopeParam;
+  const scope = ((resolvedScopeParam ?? defaults?.scope ?? 'all') as FeedScope) || 'all';
+  const creatorId = sp.get('creatorId') ?? defaults?.creatorId ?? null;
+  const channelIdsFromUrl = sp.getAll('channelIds');
+  const channelIds = channelIdsFromUrl.length ? channelIdsFromUrl : defaults?.channelIds ?? [];
   const platform = (sp.get('platform') ?? 'all') as PlatformType;
   const sort = (sp.get('sort') ?? 'published') as SortType;
   const rawType = (sp.get('filterType') ?? 'all') as ContentFilterType;

@@ -2,13 +2,16 @@ import { makeVideoUrl } from '@/lib/links';
 
 /** RPC row → API item (최신순/공통) */
 export function mapPublishedRowToItem(row: any) {
+  const contentType = row.content_type as 'video' | 'short' | 'live' | 'vod' | undefined;
+  const isLiveContent = contentType === 'live';
+
   const url =
     makeVideoUrl({
       platform: row.platform,
       platformChannelId: row.platform_channel_id,
       platformVideoId: row.platform_video_id,
-      isLive: row.is_live_now,
-      contentType: row.content_type,
+      isLive: isLiveContent,
+      contentType,
       chzzkVideoNo: row.chzzk_video_no,
     }) ?? undefined;
 
@@ -20,8 +23,8 @@ export function mapPublishedRowToItem(row: any) {
     thumb: row.thumbnail_url ?? null,
     publishedAt: row.published_at,
     durationSec: row.duration_sec ?? null,
-    isLive: !!row.is_live_now,
-    contentType: row.content_type,
+    isLive: isLiveContent,
+    contentType,
     stats: {
       views: row.view_count ?? null,
       likes: row.like_count ?? null,

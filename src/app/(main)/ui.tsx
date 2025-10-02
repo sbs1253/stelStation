@@ -10,10 +10,17 @@ import { useEffect, useRef } from 'react';
 import FeedSkeleton from '@/features/feed/components/FeedSkeleton';
 import FeedError from '@/features/feed/components/FeedError';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import type { FeedScope } from '@/features/feed/types';
 
-export default function Ui() {
+type FeedStateDefaults = {
+  scope?: FeedScope;
+  creatorId?: string | null;
+  channelIds?: string[];
+};
+
+export default function Ui({ initialState }: { initialState?: FeedStateDefaults } = {}) {
   const { scope, creatorId, channelIds, platform, sort, filterType, pendingPlatform, isNavPending, setParam } =
-    useUrlFeedState();
+    useUrlFeedState(initialState);
   const {
     data: items = [],
     status,
@@ -23,7 +30,6 @@ export default function Ui() {
     isFetchingNextPage,
     refetch,
   } = useFeedQuery({ scope, creatorId, channelIds, platform, sort, filterType });
-
   const pageSize = getFeedPageSize(scope);
 
   const { ref: loadMoreRef } = useInfiniteSentinel({
@@ -63,6 +69,10 @@ export default function Ui() {
         </div>
 
         <div className="p-4">
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 sm:text-sm">
+            StelStation은 스텔라이브의 공식 서비스가 아닙니다. 스텔라이브를 응원하는 팬이 제작한 비공식 통합 플랫폼으로,
+            사이트 내 모든 콘텐츠(영상, 썸네일 등)의 저작권은 원저작자에게 있습니다.
+          </div>
           {status === 'pending' && <FeedSkeleton count={pageSize} />}
 
           {status === 'error' && <FeedError isFetching={isFetching} refetch={refetch} />}

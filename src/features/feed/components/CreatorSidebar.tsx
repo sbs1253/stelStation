@@ -21,29 +21,40 @@ import Image from 'next/image';
 import { House } from 'lucide-react';
 import { RefreshIcon } from '@/features/feed/components/RefreshButton';
 import { trackClickOutboundLink, trackRefresh, trackSelectItem } from '@/lib/analytics/events';
+import { usePathname, useRouter } from 'next/navigation';
 
 export default function CreatorSidebar() {
   const { data: channels = [], status, refetch, isRefetching } = useChannelsQuery();
   const creators = useMemo(() => buildCreatorsFromChannels(channels), [channels]);
-  const { scope, creatorId, setParams } = useUrlFeedState();
+  const { scope, creatorId, platform, sort, filterType, setParams } = useUrlFeedState();
+  const router = useRouter();
+  const pathname = usePathname();
+  const slugInPath = pathname.startsWith('/creators/') ? pathname.split('/').filter(Boolean)[1] ?? null : null;
+  const activeCreatorId = creatorId ?? (slugInPath ? creators.find((c) => c.slug === slugInPath)?.creatorId ?? null : null);
+  const isChannelsView = scope === 'channels' || Boolean(slugInPath);
   const selectAll = () => {
-    setParams({
-      platform: 'all',
-      creatorId: null,
-      channelIds: [],
-      scope: 'all',
-    });
+    router.push('/');
   };
 
   const selectCreator = (c: CreatorSidebarItem) => {
-    setParams({
-      platform: 'all',
-      filterType: 'all',
-      sort: 'published',
-      creatorId: c.creatorId,
-      channelIds: c.channelIds,
-      scope: 'channels',
-    });
+    const slug = c.slug;
+    if (!slug) {
+      setParams({
+        platform: 'all',
+        filterType: 'all',
+        sort: 'published',
+        creatorId: c.creatorId,
+        channelIds: c.channelIds,
+        scope: 'channels',
+      });
+      return;
+    }
+    const params = new URLSearchParams();
+    if (platform && platform !== 'all') params.set('platform', platform);
+    if (sort && sort !== 'published') params.set('sort', sort);
+    if (filterType && filterType !== 'all') params.set('filterType', filterType);
+    const qs = params.toString();
+    router.push(qs ? `/creators/${slug}?${qs}` : `/creators/${slug}`);
   };
 
   return (
@@ -55,7 +66,7 @@ export default function CreatorSidebar() {
               onClick={selectAll}
               aria-label="전체 크리에이터"
               className="cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99]"
-              isActive={scope === 'all'}
+              isActive={!slugInPath && scope === 'all'}
             >
               <House className="size-4 flex-shrink-0" />
               <span className="font-bold truncate group-data-[collapsible=icon]:hidden">전체 크리에이터</span>
@@ -98,7 +109,7 @@ export default function CreatorSidebar() {
           )}
           {status === 'success' &&
             creators.map((c) => {
-              const isActive = scope === 'channels' && creatorId === c.creatorId;
+              const isActive = isChannelsView && activeCreatorId === c.creatorId;
               return (
                 <SidebarMenuItem key={c.creatorId}>
                   <SidebarMenuButton

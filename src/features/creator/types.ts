@@ -8,6 +8,7 @@ export type CreatorSidebarItem = {
   isLiveNow: boolean;
   channelIds: string[];
   x?: string | null;
+  slug?: string | null;
 };
 
 export type ChannelRow = {
@@ -20,4 +21,5 @@ export type ChannelRow = {
   recentPublishedAt: string | null;
   creatorId: string | null;
   creatorX?: string | null;
+  creatorSlug?: string | null;
 };
