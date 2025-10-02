@@ -22,7 +22,6 @@ export default function FeedCard({ item, priority }: { item: FeedItem; priority:
     if (!thumb) return null;
     return thumb.includes('{type}') ? thumb.replace('{type}', '720') : thumb;
   };
-
   const thumbnailUrl = getThumbnailUrl(item.thumb);
   const published = item.publishedAt ? new Date(item.publishedAt) : null;
   return (

@@ -80,7 +80,6 @@ export default async function CreatorPage({ params, searchParams }: CreatorPageP
 
   incoming.delete('channelIds');
   creator.channelIds.forEach((id) => incoming.append('channelIds', id));
-
   const normalizedUrl = new URL(`/api/feed?${incoming.toString()}`, base);
   const parsed = parseFeedQueryFromURL(normalizedUrl);
   const pageSize = getFeedPageSize(parsed.scope);
