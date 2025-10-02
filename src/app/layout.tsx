@@ -12,9 +12,45 @@ const pretendard = localFont({
   weight: '100 900',
   variable: '--font-pretendard',
 });
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://stelstation.com';
+
 export const metadata: Metadata = {
-  title: 'stel station',
-  description: 'Hello StelStation',
+  metadataBase: new URL(siteUrl),
+  title: {
+    template: '%s | StelStation',
+    default: 'StelStation – 비공식 팬 플랫폼',
+  },
+  description:
+    'StelStation은 스텔라이브 공식 서비스가 아닌 팬이 만든 비공식 통합 플랫폼입니다. 최신 방송과 영상을 한곳에서 확인하세요.',
+  keywords: ['StelStation', '스텔라이브', 'vtuber', '라이브 방송', '팬 플랫폼'],
+  authors: [{ name: 'StelStation Fan Community' }],
+  openGraph: {
+    title: 'StelStation – 비공식 팬 플랫폼',
+    description:
+      'StelStation은 스텔라이브를 응원하는 팬들이 운영하는 비공식 통합 플랫폼입니다. 최신 방송과 다시보기 정보를 모아보세요.',
+    url: siteUrl,
+    siteName: 'StelStation',
+    locale: 'ko_KR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'StelStation – 비공식 팬 플랫폼',
+    description:
+      'StelStation은 스텔라이브를 응원하는 팬이 만든 비공식 통합 플랫폼입니다. 최신 방송 정보를 한눈에 확인하세요.',
+  },
+  alternates: {
+    canonical: siteUrl,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+  },
 };
 
 export default function RootLayout({
