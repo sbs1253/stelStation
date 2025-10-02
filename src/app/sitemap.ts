@@ -1,8 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { supabaseService } from '@/lib/supabase/service';
 
-export const revalidate = 60 * 60; // 1 hour
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://stelstation.com';
 
