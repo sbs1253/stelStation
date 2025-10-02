@@ -5,6 +5,7 @@ import Providers from '@/app/providers';
 import GaTracker from '@/app/ga-tracker';
 import { Suspense } from 'react';
 import localFont from 'next/font/local';
+import { Analytics } from '@vercel/analytics/next';
 
 const pretendard = localFont({
   src: '../fonts/pretendard/PretendardVariable.woff2',
@@ -67,7 +68,10 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning className={`${pretendard.variable} antialiased`}>
       <body className="h-full overflow-hidden">
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <Analytics />
+        </Providers>
 
         {/* Cloudflare Web Analytics (JS Beacon) */}
         {process.env.NODE_ENV === 'production' && beaconToken ? (
