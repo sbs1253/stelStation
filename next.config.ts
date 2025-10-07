@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins: ['calm-stinkbug-pure.ngrok-free.app'],
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
