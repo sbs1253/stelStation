@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseService } from '@/lib/supabase/service';
+import { createSyncDeps } from '@/services/sync/syncDeps';
+import { runChannelSync } from '@/services/sync/runChannelSync';
 
 // 기본값
 const DEFAULT_CONCURRENCY = 3; // 동시에 처리할 채널 개수
@@ -13,8 +15,12 @@ const CRON_SECRET: string = (() => {
 
 // 배치 사이 지연용
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const deps = createSyncDeps();
 
 export async function POST(request: Request) {
+  const SYNC_ENABLED = process.env.SYNC_ENABLED !== 'false';
+  if (!SYNC_ENABLED) return NextResponse.json({ ok: true, skipped: 'sync disabled' }, { status: 204 });
+
   /** 0) 내부 인증 확인 */
   const receivedSecret = request.headers.get('x-cron-secret');
   if (receivedSecret !== CRON_SECRET) {
@@ -106,51 +112,18 @@ export async function POST(request: Request) {
 
   // 5) 단일 채널 동기화 헬퍼
 
-  async function syncOneChannel(channelId: string): Promise<'ok' | 'cooldown' | 'fail'> {
-    try {
-      const response = await fetch(`${origin}/api/sync/channel`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-cron-secret': CRON_SECRET,
-        },
-        body: JSON.stringify({ channelId, mode: 'full' }),
-      });
-
-      if (response.status === 429) {
-        return 'cooldown';
-      }
-      if (!response.ok) {
-        try {
-          const text = await response.text();
-          let reason = String(response.status);
-          try {
-            const json = JSON.parse(text);
-            reason = json?.details || json?.error || reason;
-          } catch {}
-          failReasons[reason] = (failReasons[reason] || 0) + 1;
-          if (sampleErrors.length < 5) {
-            sampleErrors.push({ channelId, status: response.status, details: reason });
-          }
-        } catch {
-          const reason = String(response.status);
-          failReasons[reason] = (failReasons[reason] || 0) + 1;
-          if (sampleErrors.length < 5) {
-            sampleErrors.push({ channelId, status: response.status, details: reason });
-          }
-        }
-        return 'fail';
-      }
-      return 'ok';
-    } catch (error: any) {
-      const reason = error?.message ? String(error.message) : 'fetch_failed';
-      failReasons[reason] = (failReasons[reason] || 0) + 1;
-      if (sampleErrors.length < 5) {
-        sampleErrors.push({ channelId, details: reason });
-      }
+async function syncOneChannel(channelId: string): Promise<'ok' | 'cooldown' | 'fail'> {
+  try {
+    const res = await runChannelSync(deps, { channelId, mode: 'full', force: false });
+    if (!res.ok) {
+      if (res.status === 429) return 'cooldown';
       return 'fail';
     }
+    return 'ok';
+  } catch {
+    return 'fail';
   }
+}
 
   /** 6) 동시성 제한 루프(배치 처리 + 배치 간 대기) */
   let attempted = 0;
