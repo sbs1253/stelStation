@@ -1,0 +1,85 @@
+name: Scheduled pollers (live + recent)
+
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+    - cron: '5-59/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-poll:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '2-59/5 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    concurrency:
+      group: cron-live-poll
+      cancel-in-progress: true
+    env:
+      PROD_API_BASE: ${{ secrets.PROD_API_BASE }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Chzzk live poll (retry)
+        run: |
+          set -euo pipefail
+          URL="${PROD_API_BASE%/}/api/cron/chzzk-live-poll"
+          for d in 0 2 5; do
+            sleep "$d"
+            if curl -L -sS --fail-with-body --retry 3 --retry-all-errors --max-time 90 \
+              -X POST "$URL" \
+              -H "content-type: application/json" \
+              -H "x-cron-secret: $CRON_SECRET" \
+              -d '{}'
+            then
+              break
+            fi
+            [ "$d" = 5 ] && exit 1
+          done
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## ⏱️ Scheduled poller summary — live poll"
+            echo ""
+            echo "- trigger: ${{ github.event_name }} / '${{ github.event.schedule }}'"
+            echo "- endpoint: ${PROD_API_BASE%/}/api/cron/chzzk-live-poll"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  recent-batch:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5-59/10 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    concurrency:
+      group: cron-recent-batch
+      cancel-in-progress: true
+    env:
+      PROD_API_BASE: ${{ secrets.PROD_API_BASE }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Recent batch sync (retry)
+        run: |
+          set -euo pipefail
+          URL="${PROD_API_BASE%/}/api/sync/recent-batch"
+          for d in 0 2 5; do
+            sleep "$d"
+            if curl -L -sS --fail-with-body --retry 3 --retry-all-errors --max-time 180 \
+              -X POST "$URL" \
+              -H "content-type: application/json" \
+              -H "x-cron-secret: $CRON_SECRET" \
+              -d '{}'
+            then
+              break
+            fi
+            [ "$d" = 5 ] && exit 1
+          done
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## ⏱️ Scheduled poller summary — recent batch"
+            echo ""
+            echo "- trigger: ${{ github.event_name }} / '${{ github.event.schedule }}'"
+            echo "- endpoint: ${PROD_API_BASE%/}/api/sync/recent-batch"
+          } >> "$GITHUB_STEP_SUMMARY"
