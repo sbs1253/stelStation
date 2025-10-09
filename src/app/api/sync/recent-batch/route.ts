@@ -2,6 +2,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabaseService } from '@/lib/supabase/service';
+import { createSyncDeps } from '@/services/sync/syncDeps';
+import { runChannelSync } from '@/services/sync/runChannelSync';
 
 const CRON_SECRET: string = (() => {
   const value = process.env.CRON_SECRET;
@@ -19,9 +21,13 @@ const BodySchema = z.object({
   mode: z.enum(['recent']).default('recent'),
   force: z.boolean().optional(),
 });
+  const deps = createSyncDeps();
 
 // 라우트 핸들러
 export async function POST(req: Request) {
+  const SYNC_ENABLED = process.env.SYNC_ENABLED !== 'false';
+  if (!SYNC_ENABLED) return NextResponse.json({ ok: true, skipped: 'sync disabled' }, { status: 204 });
+
   // 0) 내부 보호
   if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -183,48 +189,31 @@ export async function POST(req: Request) {
   }
 
   // 5) 개별 채널 recent 실행 헬퍼
-  const origin = new URL(req.url).origin;
-  async function syncOne(
-    channelId: string
-  ): Promise<{ channelId: string; state: 'ok' | 'cooldown' | 'fail'; reason?: string }> {
-    try {
-      const res = await fetch(`${origin}/api/sync/channel`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-cron-secret': CRON_SECRET,
-        },
-        body: JSON.stringify({
-          channelId,
-          mode: 'recent',
-          ...(body.force ? { force: true } : {}),
-        }),
-      });
 
-      // Treat 429 separately as cooldown
+async function syncOne(
+  channelId: string,
+  mode: 'recent',
+  force: boolean
+): Promise<{ channelId: string; state: 'ok' | 'cooldown' | 'fail'; reason?: string }> {
+  try {
+    const res = await runChannelSync(deps, { channelId, mode, force });
+    if (!res.ok) {
+      // runChannelSync는 쿨다운이면 status 429로 실패 반환
       if (res.status === 429) {
-        let reason = 'HTTP 429';
-        try {
-          const j = await res.json();
-          if (j?.error) reason = `${j.error}${j.details ? `: ${j.details}` : ''}`;
-        } catch {}
+        const reason = typeof res.body?.error === 'string' ? res.body.error : 'COOLDOWN';
         return { channelId, state: 'cooldown', reason };
       }
-
-      if (!res.ok) {
-        let reason = `HTTP ${res.status}`;
-        try {
-          const j = await res.json();
-          if (j?.error) reason = `${j.error}${j.details ? `: ${j.details}` : ''}`;
-        } catch {}
-        return { channelId, state: 'fail', reason };
-      }
-
-      return { channelId, state: 'ok' };
-    } catch (e: any) {
-      return { channelId, state: 'fail', reason: String(e?.message ?? e) };
+      const reason =
+        (typeof res.body?.error === 'string' && res.body.error) ||
+        (typeof res.body?.message === 'string' && res.body.message) ||
+        `status:${res.status}`;
+      return { channelId, state: 'fail', reason };
     }
+    return { channelId, state: 'ok' };
+  } catch (e: any) {
+    return { channelId, state: 'fail', reason: String(e?.message ?? e) };
   }
+}
 
   // 6) 제한 동시성 실행(배치 간 대기)
   const results: Array<{ channelId: string; state: 'ok' | 'cooldown' | 'fail'; reason?: string }> = [];
@@ -232,7 +221,7 @@ export async function POST(req: Request) {
     const batch = targetChannelIds.slice(i, i + concurrency);
 
     // 각 요청과 channelId의 인덱스 매핑을 유지해, 실패 시에도 정확한 channelId를 기록
-    const batchResults = await Promise.allSettled(batch.map((id) => syncOne(id)));
+    const batchResults = await Promise.allSettled(batch.map((id) => syncOne(id, 'recent', !!body.force)));
 
     for (let idx = 0; idx < batchResults.length; idx++) {
       const s = batchResults[idx];
