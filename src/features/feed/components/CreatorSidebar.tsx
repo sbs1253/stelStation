@@ -33,6 +33,7 @@ export default function CreatorSidebar() {
   const activeCreatorId = creatorId ?? (slugInPath ? creators.find((c) => c.slug === slugInPath)?.creatorId ?? null : null);
   const isChannelsView = scope === 'channels' || Boolean(slugInPath);
   const selectAll = () => {
+    if (!slugInPath && scope === 'all') return;
     router.push('/');
   };
 
@@ -54,6 +55,7 @@ export default function CreatorSidebar() {
     if (sort && sort !== 'published') params.set('sort', sort);
     if (filterType && filterType !== 'all') params.set('filterType', filterType);
     const qs = params.toString();
+    if (slugInPath === slug) return;
     router.push(qs ? `/creators/${slug}?${qs}` : `/creators/${slug}`);
   };
 

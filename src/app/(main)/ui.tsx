@@ -46,7 +46,6 @@ export default function Ui({ initialState }: { initialState?: FeedStateDefaults 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [platform, sort, filterType, scope, creatorId, channelKey]);
-
   return (
     <div className="flex w-full h-screen min-h-0">
       <main
