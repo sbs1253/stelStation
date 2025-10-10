@@ -47,12 +47,12 @@ export default function Ui({ initialState }: { initialState?: FeedStateDefaults 
     mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [platform, sort, filterType, scope, creatorId, channelKey]);
   return (
-    <div className="flex w-full h-screen min-h-0">
+    <div className="flex w-full h-svh min-h-0">
       <main
         ref={mainRef}
         className={`flex-1 overflow-y-auto ${isFetching || isNavPending ? 'opacity-70 pointer-events-none' : ''}`}
       >
-        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm p-4 border-b ">
+        <div className="sticky top-0 top-[env(safe-area-inset-top)] z-50 bg-background/80 backdrop-blur-sm p-4 border-b">
           <div className="flex">
             <SidebarTrigger className="relative left-[-5px]" />
             <FeedControls
