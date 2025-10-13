@@ -6,6 +6,7 @@ import GaTracker from '@/app/ga-tracker';
 import { Suspense } from 'react';
 import localFont from 'next/font/local';
 import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const pretendard = localFont({
   src: '../fonts/pretendard/PretendardVariable.woff2',
@@ -71,6 +72,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <Analytics />
+          <SpeedInsights />
         </Providers>
 
         {/* Cloudflare Web Analytics (JS Beacon) */}
