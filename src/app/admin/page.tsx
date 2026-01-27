@@ -5,11 +5,12 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Eye, Video, Users, TrendingUp, RefreshCw, Loader2 } from 'lucide-react';
-import { useAdminStats } from '@/features/admin/hooks/useAdminStats';
+import { useAdminStats, useTopVideos } from '@/features/admin/hooks/useAdminStats';
 import { KPICard } from '@/features/admin/components/KPICard';
 import { PlatformChart } from '@/features/admin/components/PlatformChart';
 import { ContentTypeChart } from '@/features/admin/components/ContentTypeChart';
 import { ChannelTable } from '@/features/admin/components/ChannelTable';
+import { TopVideosModal } from '@/features/admin/components/TopVideosModal';
 import type { DateRange, SortBy } from '@/features/admin/types';
 
 function formatNumber(num: number): string {
@@ -22,21 +23,33 @@ export default function AdminDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>('last_7_days');
   const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>('all');
   const [sortBy, setSortBy] = useState<SortBy>('views');
+  const [showTopVideos, setShowTopVideos] = useState(false);
 
   const { data, isLoading, isFetching, refetch } = useAdminStats({
     platform,
     dateRange,
   });
 
+  const { data: topVideosData, isLoading: topVideosLoading } = useTopVideos({
+    platform,
+    limit: 10,
+  });
+
   // 채널 정렬
   const sortedChannels = [...(data?.channelStats || [])].sort((a, b) => {
     if (sortBy === 'views') return b.totalViews - a.totalViews;
-    if (sortBy === 'generation') return (a.generation || 999) - (b.generation || 999);
+    if (sortBy === 'generation') {
+      // 기수가 없는 채널은 맨 뒤로
+      if (a.generation === undefined && b.generation === undefined) return 0;
+      if (a.generation === undefined) return 1;
+      if (b.generation === undefined) return -1;
+      return a.generation - b.generation;
+    }
     return a.channelName.localeCompare(b.channelName);
   });
 
   return (
-    <div className="h-svh min-h-0 overflow-x-scroll bg-gray-50 p-8 ">
+    <div className="h-svh min-h-0 overflow-y-auto bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <div className="mb-8 flex justify-between items-center">
@@ -44,10 +57,16 @@ export default function AdminDashboard() {
             <h1 className="text-3xl font-bold text-gray-900">관리자 대시보드</h1>
             <p className="text-gray-600 mt-2">StelStation 통계 및 분석</p>
           </div>
-          <Button onClick={() => refetch()} disabled={isFetching} variant="outline" size="sm" className="gap-2">
-            {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            새로고침
-          </Button>
+          <div className="flex gap-3">
+            <Button onClick={() => setShowTopVideos(true)} variant="outline" size="sm" className="gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Top 10 영상
+            </Button>
+            <Button onClick={() => refetch()} disabled={isFetching} variant="outline" size="sm" className="gap-2">
+              {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              새로고침
+            </Button>
+          </div>
         </div>
 
         {/* 필터 영역 */}
@@ -102,7 +121,7 @@ export default function AdminDashboard() {
             isLoading={isLoading}
           />
           <KPICard
-            title="평균 조회수"
+            title="평균 조회수 (영상당)"
             value={formatNumber(data?.kpi.avgViews || 0)}
             change={data?.kpi.avgViewsChange}
             icon={TrendingUp}
@@ -122,6 +141,14 @@ export default function AdminDashboard() {
 
         {/* 채널별 상세 테이블 */}
         <ChannelTable data={sortedChannels} sortBy={sortBy} onSortChange={setSortBy} isLoading={isLoading} />
+
+        {/* Top 10 영상 모달 */}
+        <TopVideosModal
+          open={showTopVideos}
+          onOpenChange={setShowTopVideos}
+          videos={topVideosData?.topVideos || []}
+          isLoading={topVideosLoading}
+        />
       </div>
     </div>
   );

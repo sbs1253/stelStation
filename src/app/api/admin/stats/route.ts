@@ -162,7 +162,7 @@ export async function GET(request: Request) {
       p.avgViews = p.videos > 0 ? Math.round(p.views / p.videos) : 0;
     });
 
-    // 6. 채널별 통계
+    // 6. 채널별 통계 + 기수 정보
     const channelStats = await Promise.all(
       (channels || []).map(async (channel) => {
         const channelVideos = currentVideos?.filter(v => v.channel_id === channel.id) || [];
@@ -173,18 +173,30 @@ export async function GET(request: Request) {
         
         const viewsChange = prevViews > 0 ? ((views - prevViews) / prevViews) * 100 : 0;
 
-        // 크리에이터 정보 조회 (기수)
+        // ✅ 크리에이터 정보 조회 (기수) - JOIN 방식 개선
         const { data: creatorData } = await supabase
           .from('creator_channels')
-          .select('creator_id, creators(gen)')
+          .select(`
+            creator_id,
+            creators!inner (
+              gen
+            )
+          `)
           .eq('channel_id', channel.id)
-          .single();
+          .maybeSingle();
+
+        // ✅ 안전하게 gen 값 추출
+        const generation = creatorData?.creators 
+          ? (Array.isArray(creatorData.creators) 
+              ? creatorData.creators[0]?.gen 
+              : (creatorData.creators as any)?.gen)
+          : undefined;
 
         return {
           channelId: channel.id,
           channelName: channel.title || 'Unknown',
           platform: channel.platform as 'youtube' | 'chzzk',
-          generation: (creatorData?.creators as any)?.gen || undefined,
+          generation: generation || undefined, // ✅ 기수 정보 확실히 포함
           totalViews: views,
           totalVideos: channelVideos.length,
           avgViews: channelVideos.length > 0 ? Math.round(views / channelVideos.length) : 0,
