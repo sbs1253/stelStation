@@ -166,6 +166,10 @@ Stel Station은 YouTube API Services 정책을 준수하기 위해 다음과 같
 
 이 프로젝트는 MIT 라이선스를 따릅니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참고해주세요.
 
+---
+
+<sub>🔒 [관리자 도구](https://stel-station.vercel.app/admin) - 내부 통계 확인용</sub>
+
 <!--배지 URL-->
 [repository-size-shield]: https://img.shields.io/github/repo-size/sbs1253/stelStation
 [stars-shield]: https://img.shields.io/github/stars/sbs1253/stelStation
