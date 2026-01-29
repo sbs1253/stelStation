@@ -1,10 +1,6 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Ignore ESLint errors during production build on Vercel
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   allowedDevOrigins: ['calm-stinkbug-pure.ngrok-free.app'],
   images: {
     unoptimized: true,

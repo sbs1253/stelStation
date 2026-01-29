@@ -49,27 +49,28 @@ export async function GET(request: Request) {
   if (creatorIds.length) {
     const { data, error: creatorErr } = await supabaseService
       .from('creators')
-      .select('id, x_url, slug')
+      .select('id, x_url, slug, gen')
       .in('id', creatorIds);
     if (creatorErr) {
       return NextResponse.json({ error: 'DB error', details: creatorErr.message }, { status: 500 });
     }
     creatorRows = data ?? [];
   }
-  const creatorMeta: Record<string, { x: string | null; slug: string | null }> = creatorRows.reduce(
-    (acc: Record<string, { x: string | null; slug: string | null }>, row: any) => {
-      acc[row.id] = { x: row.x_url ?? null, slug: row.slug ?? null };
+  const creatorMeta: Record<string, { x: string | null; slug: string | null; gen: number | null }> = creatorRows.reduce(
+    (acc: Record<string, { x: string | null; slug: string | null; gen: number | null }>, row: any) => {
+      acc[row.id] = { x: row.x_url ?? null, slug: row.slug ?? null, gen: row.gen ?? null };
       return acc;
     },
     {}
   );
-  const creatorByChannel: Record<string, { id: string; x: string | null; slug: string | null }> = (ccRows ?? []).reduce(
-    (acc: Record<string, { id: string; x: string | null; slug: string | null }>, r: any) => {
-      const meta = creatorMeta[r.creator_id] ?? { x: null, slug: null };
+  const creatorByChannel: Record<string, { id: string; x: string | null; slug: string | null; gen: number | null }> = (ccRows ?? []).reduce(
+    (acc: Record<string, { id: string; x: string | null; slug: string | null; gen: number | null }>, r: any) => {
+      const meta = creatorMeta[r.creator_id] ?? { x: null, slug: null, gen: null };
       acc[r.channel_id] = {
         id: r.creator_id,
         x: meta.x,
         slug: meta.slug,
+        gen: meta.gen,
       };
       return acc;
     },
@@ -83,6 +84,7 @@ export async function GET(request: Request) {
       creatorId: meta?.id ?? null,
       creatorX: meta?.x ?? null,
       creatorSlug: meta?.slug ?? null,
+      creatorGen: meta?.gen ?? null,
     };
   });
 
