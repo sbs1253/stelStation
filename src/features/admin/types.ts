@@ -1,51 +1,50 @@
-export type DateRange = 
-  | 'today_vs_yesterday'
-  | 'this_week_vs_last_week'
-  | 'last_7_days'
-  | 'last_30_days';
+export type DateRangeType = 'today_vs_yesterday' | 'this_week_vs_last_week' | 'last_7_days' | 'last_30_days';
 
-export type SortBy = 'views' | 'generation' | 'channel_name';
+export type PlatformType = 'all' | 'youtube' | 'chzzk';
 
-export type AdminFilters = {
-  channelIds: string[];
-  platform: 'all' | 'youtube' | 'chzzk';
-  dateRange: DateRange;
-  contentType: 'all' | 'video' | 'short' | 'vod';
-  sortBy: SortBy;
+export type ContentType = 'all' | 'video' | 'short' | 'vod';
+
+// ===== 필터 옵션 =====
+export type FilterValue = DateRangeType | PlatformType | ContentType;
+
+export type FilterOption = {
+  value: FilterValue;
+  label: string;
 };
 
+// ===== 테이블 정렬 =====
+export type SortKey = 'totalViews' | 'avgViews' | 'totalVideos' | 'viewsChange';
+
+export type SortOrder = 'asc' | 'desc';
+
+export type AdminFilters = {
+  platform: PlatformType;
+  dateRange: DateRangeType;
+  channelIds: string[];
+  contentType: ContentType;
+};
+
+// ===== KPI =====
 export type KPIData = {
   totalViews: number;
   totalVideos: number;
   totalChannels: number;
   avgViews: number;
-  // 증감률 (전 기간 대비)
-  viewsChange?: number;
-  videosChange?: number;
-  channelsChange?: number;
-  avgViewsChange?: number;
+  viewsChange: number;
+  videosChange: number;
+  channelsChange: number;
+  avgViewsChange: number;
 };
 
-export type PlatformStats = {
+// ===== 플랫폼별 통계 =====
+export type PlatformStat = {
   platform: 'youtube' | 'chzzk';
   views: number;
   videos: number;
   avgViews: number;
 };
 
-export type TrendDataPoint = {
-  date: string;
-  views: number;
-  videos: number;
-  label?: string; // "오늘", "어제" 등
-};
-
-export type ContentTypeDistribution = {
-  type: 'video' | 'short' | 'vod';
-  count: number;
-  percentage: number;
-};
-
+// ===== 채널별 통계 =====
 export type ChannelStat = {
   channelId: string;
   channelName: string;
@@ -54,22 +53,31 @@ export type ChannelStat = {
   totalViews: number;
   totalVideos: number;
   avgViews: number;
-  topVideo?: {
-    title: string;
-    views: number;
-    publishedAt: string;
-  };
-  // 증감률
-  viewsChange?: number;
+  viewsChange: number;
 };
 
-export type TopVideo = {
-  videoId: string;
-  title: string;
-  channelName: string;
-  platform: 'youtube' | 'chzzk';
-  contentType: 'video' | 'short' | 'vod';
+// ===== 콘텐츠 타입 분포 =====
+export type ContentTypeStat = {
+  type: 'video' | 'short' | 'vod';
+  count: number;
+  percentage: number;
+};
+
+// ===== 일별 조회수 =====
+export type DailyView = {
+  date: string;
   views: number;
-  publishedAt: string;
-  thumbnailUrl?: string;
+};
+
+// ===== API 응답 =====
+export type AdminStatsResponse = {
+  kpi: KPIData;
+  platformStats: PlatformStat[];
+  channelStats: ChannelStat[];
+  contentTypeDistribution: ContentTypeStat[];
+  dateRange: {
+    current: { start: string; end: string };
+    previous: { start: string; end: string } | null;
+  };
+  dailyViews: DailyView[];
 };

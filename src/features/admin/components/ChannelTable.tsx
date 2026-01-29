@@ -1,90 +1,94 @@
-import { Card } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { ChannelStat, SortBy } from '../types';
+'use client';
+import { useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
+import type { ChannelStat, SortKey, SortOrder } from '@/features/admin/types';
 
-type ChannelTableProps = {
+type ChannelStatsTableProps = {
   data: ChannelStat[];
-  sortBy: SortBy;
-  onSortChange: (sort: SortBy) => void;
-  isLoading?: boolean;
+  onSelectChannel?: (channelId: string) => void;
 };
 
-function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toString();
-}
+export function ChannelStatsTable({ data, onSelectChannel }: ChannelStatsTableProps) {
+  const [sortKey, setSortKey] = useState<SortKey>('totalViews');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
-export function ChannelTable({ data, sortBy, onSortChange, isLoading }: ChannelTableProps) {
+  const sortedData = useMemo(
+    () =>
+      [...data].sort((a, b) => {
+        const aValue = a[sortKey];
+        const bValue = b[sortKey];
+        if (sortOrder === 'asc') return aValue - bValue;
+        return bValue - aValue;
+      }),
+    [data, sortKey, sortOrder],
+  );
+
+  function SortableHead({ label, columnKey }: { label: string; columnKey: SortKey }) {
+    const isActive = sortKey === columnKey;
+
+    return (
+      <TableHead
+        onClick={() => {
+          if (isActive) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+          } else {
+            setSortKey(columnKey);
+            setSortOrder('desc');
+          }
+        }}
+        className="cursor-pointer text-right select-none"
+      >
+        <div className="flex items-center justify-end gap-1">
+          {label}
+          {isActive && (sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+        </div>
+      </TableHead>
+    );
+  }
+
   return (
-    <Card className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">채널별 통계</h3>
-        <Tabs value={sortBy} onValueChange={(v) => onSortChange(v as SortBy)}>
-          <TabsList>
-            <TabsTrigger value="views">조회수순</TabsTrigger>
-            <TabsTrigger value="generation">기수별</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+    <div className="mt-6 rounded-md border">
+      <div className="p-4">
+        <div className="overflow-x-auto">
+          <Table className="min-w-[900px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>채널</TableHead>
+                <TableHead>플랫폼</TableHead>
+                <SortableHead label="총 조회수" columnKey="totalViews" />
+                <SortableHead label="영상당 평균 조회수" columnKey="avgViews" />
+                <SortableHead label="영상 수" columnKey="totalVideos" />
+                <SortableHead label="조회수 증감" columnKey="viewsChange" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedData.map((channel) => {
+                const isPositive = channel.viewsChange >= 0;
 
-      <div className="overflow-x-auto">
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-12 bg-gray-200 animate-pulse rounded" />
-            ))}
-          </div>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-4 font-semibold text-sm">채널명</th>
-                <th className="text-left py-3 px-4 font-semibold text-sm">플랫폼</th>
-                <th className="text-left py-3 px-4 font-semibold text-sm">기수</th>
-                <th className="text-right py-3 px-4 font-semibold text-sm">총 조회수</th>
-                <th className="text-right py-3 px-4 font-semibold text-sm">영상 수</th>
-                <th className="text-right py-3 px-4 font-semibold text-sm">평균 조회수</th>
-                <th className="text-right py-3 px-4 font-semibold text-sm">증감률</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((channel) => (
-                <tr key={channel.channelId} className="border-b hover:bg-gray-50">
-                  <td className="py-3 px-4 font-medium">{channel.channelName}</td>
-                  <td className="py-3 px-4">
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100">
-                      {channel.platform}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-gray-600">{channel.generation ? `${channel.generation}기` : '-'}</td>
-                  <td className="py-3 px-4 text-right font-medium">{formatNumber(channel.totalViews)}</td>
-                  <td className="py-3 px-4 text-right">{channel.totalVideos}</td>
-                  <td className="py-3 px-4 text-right">{formatNumber(channel.avgViews)}</td>
-                  <td
-                    className={`py-3 px-4 text-right font-medium ${
-                      channel.viewsChange && channel.viewsChange > 0
-                        ? 'text-green-600'
-                        : channel.viewsChange && channel.viewsChange < 0
-                          ? 'text-red-600'
-                          : 'text-gray-600'
-                    }`}
+                return (
+                  <TableRow
+                    key={channel.channelId}
+                    onClick={() => onSelectChannel?.(channel.channelId)}
+                    className="hover:bg-muted/50 cursor-pointer"
                   >
-                    {channel.viewsChange !== undefined ? (
-                      <>
-                        {channel.viewsChange > 0 ? '+' : ''}
-                        {channel.viewsChange.toFixed(1)}%
-                      </>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                    <TableCell className="max-w-[220px] truncate font-medium">{channel.channelName}</TableCell>
+                    <TableCell className="capitalize">{channel.platform}</TableCell>
+                    <TableCell className="text-right">{channel.totalViews.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{channel.avgViews.toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{channel.totalVideos}</TableCell>
+                    <TableCell className={cn('text-right font-medium', isPositive ? 'text-red-600' : 'text-blue-600')}>
+                      {isPositive ? '+' : ''}
+                      {channel.viewsChange.toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-    </Card>
+    </div>
   );
 }

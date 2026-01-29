@@ -1,154 +1,145 @@
 'use client';
 
-import { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useMemo, useState } from 'react';
+import { useAdminStats, usePrefetchIfNeeded, useRefreshAdminStats } from '@/features/admin/hooks/useAdminStats';
+import { cn } from '@/lib/utils';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Eye, Video, Users, TrendingUp, RefreshCw, Loader2 } from 'lucide-react';
-import { useAdminStats, useTopVideos } from '@/features/admin/hooks/useAdminStats';
-import { KPICard } from '@/features/admin/components/KPICard';
-import { PlatformChart } from '@/features/admin/components/PlatformChart';
-import { ContentTypeChart } from '@/features/admin/components/ContentTypeChart';
-import { ChannelTable } from '@/features/admin/components/ChannelTable';
-import { TopVideosModal } from '@/features/admin/components/TopVideosModal';
-import type { DateRange, SortBy } from '@/features/admin/types';
-
-function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toString();
-}
+import { CreatorSidebar } from '@/features/admin/components/CreatorSidebar';
+import { useChannelsQuery } from '@/features/feed/hooks/useChannelsQuery';
+import { buildCreatorsFromChannels } from '@/features/feed/utils/buildCreators';
+import { KpiCard } from '@/features/admin/components/KPICard';
+import { PlatformStatsCard } from '@/features/admin/components/PlatformChart';
+import { ContentTypeCard } from '@/features/admin/components/ContentTypeChart';
+import { ChannelStatsTable } from '@/features/admin/components/ChannelTable';
+import { DailyViewsLineChart } from '@/features/admin/components/DailyViewsLineChart';
+import { FilterButtonGroup } from '@/features/admin/components/FilterButtonGroup';
+import { formatKstDateString } from '@/features/admin/utils';
+import AdminDashboardLoading from '@/features/admin/components/AdminDashboardSkeleton';
+import {
+  DATE_RANGE_META,
+  KPI_CARDS,
+  DATE_RANGE_OPTIONS,
+  PLATFORM_OPTIONS,
+  CONTENT_TYPE_OPTIONS,
+} from '@/features/admin/constants';
+import type { DateRangeType, PlatformType, ContentType } from '@/features/admin/types';
+import type { CreatorSidebarItem } from '@/features/creator/types';
 
 export default function AdminDashboard() {
-  const [dateRange, setDateRange] = useState<DateRange>('last_7_days');
-  const [platform, setPlatform] = useState<'all' | 'youtube' | 'chzzk'>('all');
-  const [sortBy, setSortBy] = useState<SortBy>('views');
-  const [showTopVideos, setShowTopVideos] = useState(false);
+  const [platform, setPlatform] = useState<PlatformType>('all');
+  const [dateRange, setDateRange] = useState<DateRangeType>('last_7_days');
+  const [contentType, setContentType] = useState<ContentType>('all');
 
-  const { data, isLoading, isFetching, refetch } = useAdminStats({
+  const { data: channels = [] } = useChannelsQuery();
+  const creators = useMemo(() => buildCreatorsFromChannels(channels), [channels]);
+  const [selectedCreator, setSelectedCreator] = useState<CreatorSidebarItem | null>(null);
+
+  const selectedChannelIds = selectedCreator?.channelIds ?? [];
+
+  const { data, isFetching, isError } = useAdminStats({
     platform,
     dateRange,
+    channelIds: selectedChannelIds,
+    contentType,
   });
 
-  const { data: topVideosData, isLoading: topVideosLoading } = useTopVideos({
+  const refreshStats = useRefreshAdminStats({
     platform,
-    limit: 10,
+    dateRange,
+    channelIds: selectedChannelIds,
+    contentType,
   });
 
-  // 채널 정렬
-  const sortedChannels = [...(data?.channelStats || [])].sort((a, b) => {
-    if (sortBy === 'views') return b.totalViews - a.totalViews;
-    if (sortBy === 'generation') {
-      // 기수가 없는 채널은 맨 뒤로
-      if (a.generation === undefined && b.generation === undefined) return 0;
-      if (a.generation === undefined) return 1;
-      if (b.generation === undefined) return -1;
-      return a.generation - b.generation;
-    }
-    return a.channelName.localeCompare(b.channelName);
+  const prefetchIfNeeded = usePrefetchIfNeeded({
+    platform,
+    dateRange,
+    contentType,
+    channelIds: selectedChannelIds,
   });
 
+  if (!data) return <AdminDashboardLoading />;
+  if (isError) return <div>에러 발생</div>;
   return (
-    <div className="h-svh min-h-0 overflow-y-auto bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* 헤더 */}
-        <div className="mb-8 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">관리자 대시보드</h1>
-            <p className="text-gray-600 mt-2">StelStation 통계 및 분석</p>
-          </div>
-          <div className="flex gap-3">
-            <Button onClick={() => setShowTopVideos(true)} variant="outline" size="sm" className="gap-2">
-              <TrendingUp className="w-4 h-4" />
-              Top 10 영상
-            </Button>
-            <Button onClick={() => refetch()} disabled={isFetching} variant="outline" size="sm" className="gap-2">
-              {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              새로고침
-            </Button>
-          </div>
-        </div>
+    <div className="flex h-svh min-h-0 w-full overflow-hidden">
+      <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="flex gap-6 p-8">
+          <CreatorSidebar
+            creators={creators}
+            selectedCreatorId={selectedCreator?.creatorId ?? null}
+            onSelectCreator={setSelectedCreator}
+            platform={platform}
+            dateRange={dateRange}
+            contentType={contentType}
+          />
 
-        {/* 필터 영역 */}
-        <Card className="p-4 mb-6">
-          <div className="flex flex-wrap gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">기간</label>
-              <Tabs value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-                <TabsList>
-                  <TabsTrigger value="today_vs_yesterday">오늘 vs 어제</TabsTrigger>
-                  <TabsTrigger value="this_week_vs_last_week">이번주 vs 지난주</TabsTrigger>
-                  <TabsTrigger value="last_7_days">최근 7일</TabsTrigger>
-                  <TabsTrigger value="last_30_days">최근 30일</TabsTrigger>
-                </TabsList>
-              </Tabs>
+          <div className="relative min-w-0 flex-1">
+            {isFetching && (
+              <div className="bg-background/60 absolute inset-0 z-9999 flex items-center justify-center backdrop-blur-[1px]">
+                <span className="text-muted-foreground text-sm">데이터 업데이트 중…</span>
+              </div>
+            )}
+            <div className="mb-6 flex items-start justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">관리자 대시보드</h1>
+                <p className="text-muted-foreground text-sm">
+                  {DATE_RANGE_META[dateRange].label} ({formatKstDateString(data.dateRange.current.start)} ~{' '}
+                  {formatKstDateString(data.dateRange.current.end)} · KST) · 총 {data.kpi.totalChannels}개 채널
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={refreshStats} disabled={isFetching} className="gap-2">
+                <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+                새로고침
+              </Button>
             </div>
+            <div className="bg-background/80 sticky top-[env(safe-area-inset-top)] z-50 mb-4 flex flex-wrap gap-4 rounded-lg border border-b p-6 backdrop-blur-sm">
+              <FilterButtonGroup
+                title="기간"
+                options={DATE_RANGE_OPTIONS}
+                value={dateRange}
+                onChange={(v) => setDateRange(v as DateRangeType)}
+                onHover={(v) => prefetchIfNeeded({ dateRange: v as DateRangeType })}
+              />
+              <FilterButtonGroup
+                title="플랫폼"
+                options={PLATFORM_OPTIONS}
+                value={platform}
+                onChange={(v) => setPlatform(v as PlatformType)}
+                onHover={(v) => prefetchIfNeeded({ platform: v as PlatformType })}
+              />
+              <FilterButtonGroup
+                title="콘텐츠 타입"
+                options={CONTENT_TYPE_OPTIONS}
+                value={contentType}
+                onChange={(v) => setContentType(v as ContentType)}
+                onHover={(v) => prefetchIfNeeded({ contentType: v as ContentType })}
+              />
+            </div>
+            <div className={cn(isFetching && 'pointer-events-none')}>
+              {/* KPI 카드 */}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {KPI_CARDS.map((config) => (
+                  <KpiCard
+                    key={config.key}
+                    title={config.title}
+                    value={data.kpi[config.key]}
+                    change={data.kpi[config.changeKey]}
+                    description={DATE_RANGE_META[dateRange].compareLabel}
+                  />
+                ))}
+              </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">플랫폼</label>
-              <Tabs value={platform} onValueChange={(v) => setPlatform(v as any)}>
-                <TabsList>
-                  <TabsTrigger value="all">전체</TabsTrigger>
-                  <TabsTrigger value="youtube">YouTube</TabsTrigger>
-                  <TabsTrigger value="chzzk">Chzzk</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              {/* 차트 영역 */}
+              <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                <PlatformStatsCard data={data.platformStats} />
+                <ContentTypeCard data={data.contentTypeDistribution} />
+              </div>
+
+              <ChannelStatsTable data={data.channelStats} />
+              <DailyViewsLineChart data={data.dailyViews || []} />
             </div>
           </div>
-        </Card>
-
-        {/* KPI 카드 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <KPICard
-            title="총 조회수"
-            value={formatNumber(data?.kpi.totalViews || 0)}
-            change={data?.kpi.viewsChange}
-            icon={Eye}
-            isLoading={isLoading}
-          />
-          <KPICard
-            title="총 영상 수"
-            value={data?.kpi.totalVideos || 0}
-            change={data?.kpi.videosChange}
-            icon={Video}
-            isLoading={isLoading}
-          />
-          <KPICard
-            title="총 채널 수"
-            value={data?.kpi.totalChannels || 0}
-            change={data?.kpi.channelsChange}
-            icon={Users}
-            isLoading={isLoading}
-          />
-          <KPICard
-            title="평균 조회수 (영상당)"
-            value={formatNumber(data?.kpi.avgViews || 0)}
-            change={data?.kpi.avgViewsChange}
-            icon={TrendingUp}
-            isLoading={isLoading}
-          />
         </div>
-
-        {/* 차트 영역 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <PlatformChart
-            data={data?.platformStats || []}
-            totalViews={data?.kpi.totalViews || 0}
-            isLoading={isLoading}
-          />
-          <ContentTypeChart data={data?.contentTypeDistribution || []} isLoading={isLoading} />
-        </div>
-
-        {/* 채널별 상세 테이블 */}
-        <ChannelTable data={sortedChannels} sortBy={sortBy} onSortChange={setSortBy} isLoading={isLoading} />
-
-        {/* Top 10 영상 모달 */}
-        <TopVideosModal
-          open={showTopVideos}
-          onOpenChange={setShowTopVideos}
-          videos={topVideosData?.topVideos || []}
-          isLoading={topVideosLoading}
-        />
       </div>
     </div>
   );

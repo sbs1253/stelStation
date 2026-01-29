@@ -1,44 +1,30 @@
-import { Card } from '@/components/ui/card';
-import { TrendingUp } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
-type KPICardProps = {
+// ===== KPI 카드 =====
+type KpiCardProps = {
   title: string;
   value: string | number;
   change?: number;
-  icon: React.ComponentType<{ className?: string }>;
-  isLoading?: boolean;
+  description?: string;
 };
 
-export function KPICard({ title, value, change, icon: Icon, isLoading }: KPICardProps) {
-  const isPositive = change && change > 0;
-  const isNegative = change && change < 0;
-
+export function KpiCard({ title, value, change, description }: KpiCardProps) {
+  const isPositive = change !== undefined && change >= 0;
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          {isLoading ? (
-            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded mt-2" />
-          ) : (
-            <h3 className="text-2xl font-bold mt-2">{value}</h3>
-          )}
-          {!isLoading && change !== undefined && (
-            <p
-              className={`text-xs mt-2 flex items-center gap-1 ${
-                isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-gray-600'
-              }`}
-            >
-              <TrendingUp className={`w-3 h-3 ${isNegative ? 'rotate-180' : ''}`} />
-              {isPositive ? '+' : ''}
-              {change.toFixed(1)}%
-            </p>
-          )}
-        </div>
-        <div className="p-3 bg-primary/10 rounded-full">
-          <Icon className="w-6 h-6 text-primary" />
-        </div>
-      </div>
+    <Card className="relative min-w-[150px] p-4">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="truncate text-2xl font-bold">{value.toLocaleString()}</div>
+        {change !== undefined && (
+          <div className={cn('text-sm font-medium', isPositive ? 'text-red-600' : 'text-blue-600')}>
+            {description && <span className="text-muted-foreground mr-2">{description}</span>}
+            {isPositive ? '▲' : '▼'} {Math.abs(change).toFixed(1)}%
+          </div>
+        )}
+      </CardContent>
     </Card>
   );
 }

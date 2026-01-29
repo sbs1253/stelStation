@@ -1,59 +1,45 @@
-import { Card } from '@/components/ui/card';
-import type { PlatformStats } from '../types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import type { PlatformStat } from '@/features/admin/types';
 
-type PlatformChartProps = {
-  data: PlatformStats[];
-  totalViews: number;
-  isLoading?: boolean;
-};
-
-function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toString();
-}
-
-export function PlatformChart({ data, totalViews, isLoading }: PlatformChartProps) {
-  if (isLoading) {
-    return (
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">플랫폼별 조회수</h3>
-        <div className="space-y-4">
-          {[1, 2].map((i) => (
-            <div key={i} className="space-y-2">
-              <div className="h-4 bg-gray-200 animate-pulse rounded w-1/3" />
-              <div className="h-2 bg-gray-200 animate-pulse rounded" />
-            </div>
-          ))}
-        </div>
-      </Card>
-    );
-  }
+export function PlatformStatsCard({ data }: { data: PlatformStat[] }) {
+  const total = data.reduce((sum, s) => sum + s.views, 0);
 
   return (
-    <Card className="p-6">
-      <h3 className="text-lg font-semibold mb-4">플랫폼별 조회수</h3>
-      <div className="space-y-4">
-        {data.map((item) => (
-          <div key={item.platform} className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="font-medium capitalize">{item.platform}</span>
-              <span className="text-gray-600">{formatNumber(item.views)}</span>
+    <Card>
+      <CardHeader>
+        <CardTitle>플랫폼별 조회수</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {data.map((stat) => {
+          const percentage = total > 0 ? (stat.views / total) * 100 : 0;
+          const platformName = stat.platform === 'youtube' ? 'Youtube' : 'Chzzk';
+
+          return (
+            <div key={stat.platform} className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="font-medium">{platformName}</span>
+                <span className="text-xs font-bold">{(stat.views / 1000000).toFixed(1)}M</span>
+              </div>
+
+              {/* 프로그레스 바 */}
+              <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className={cn(
+                    'absolute h-full rounded-full transition-all',
+                    stat.platform === 'youtube' ? 'bg-black' : 'bg-gray-800',
+                  )}
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
+
+              <div className="text-muted-foreground text-xs">
+                {stat.videos}개 영상 · 평균 {(stat.avgViews / 1000).toFixed(1)}K 조회수
+              </div>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-primary h-2 rounded-full transition-all"
-                style={{
-                  width: `${totalViews > 0 ? (item.views / totalViews) * 100 : 0}%`,
-                }}
-              />
-            </div>
-            <p className="text-xs text-gray-500">
-              {item.videos}개 영상 · 평균 {formatNumber(item.avgViews)} 조회수
-            </p>
-          </div>
-        ))}
-      </div>
+          );
+        })}
+      </CardContent>
     </Card>
   );
 }

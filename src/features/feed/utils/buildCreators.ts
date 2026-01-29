@@ -9,13 +9,14 @@ export function buildCreatorsFromChannels(channels: ChannelRow[]): CreatorSideba
     if (!e) {
       e = {
         creatorId: ch.creatorId,
-        name: ch.title, 
+        name: ch.title,
         thumb: ch.thumb,
         platforms: {},
         isLiveNow: false,
         channelIds: [],
         x: ch.creatorX ?? null,
         slug: ch.creatorSlug ?? null,
+        gen: ch.creatorGen ?? null,
       };
       map.set(ch.creatorId, e);
     }
@@ -24,6 +25,9 @@ export function buildCreatorsFromChannels(channels: ChannelRow[]): CreatorSideba
     if (ch.isLiveNow) e.isLiveNow = true;
     if (!e.x && ch.creatorX) {
       e.x = ch.creatorX;
+    }
+    if (!e.gen && ch.creatorGen) {
+      e.gen = ch.creatorGen;
     }
 
     if (ch.platform === 'chzzk') {
@@ -35,20 +39,13 @@ export function buildCreatorsFromChannels(channels: ChannelRow[]): CreatorSideba
     }
   }
 
-  const recentMap: Record<string, string | null> = {};
-  for (const ch of channels) {
-    if (!ch.creatorId) continue;
-    const prev = recentMap[ch.creatorId];
-    if (!prev || (ch.recentPublishedAt && ch.recentPublishedAt > (prev ?? ''))) {
-      recentMap[ch.creatorId] = ch.recentPublishedAt;
-    }
-  }
-
+  // 정렬: 기수 없음(null) → 1기 → 2기 → 3기, 같은 기수 내에서 이름순
   return Array.from(map.values()).sort((a, b) => {
-    if (a.isLiveNow !== b.isLiveNow) return a.isLiveNow ? -1 : 1;
-    const ra = recentMap[a.creatorId] ?? '';
-    const rb = recentMap[b.creatorId] ?? '';
-    if (ra !== rb) return ra > rb ? -1 : 1;
+    // 기수 정렬 (null은 0으로 처리해서 맨 앞)
+    const genA = a.gen ?? 0;
+    const genB = b.gen ?? 0;
+    if (genA !== genB) return genA - genB;
+    // 같은 기수면 이름순
     return a.name.localeCompare(b.name, 'ko');
   });
 }

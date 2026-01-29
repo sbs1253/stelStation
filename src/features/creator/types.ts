@@ -9,6 +9,7 @@ export type CreatorSidebarItem = {
   channelIds: string[];
   x?: string | null;
   slug?: string | null;
+  gen?: number | null;
 };
 
 export type ChannelRow = {
@@ -22,4 +23,5 @@ export type ChannelRow = {
   creatorId: string | null;
   creatorX?: string | null;
   creatorSlug?: string | null;
+  creatorGen?: number | null;
 };
