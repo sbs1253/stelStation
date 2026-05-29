@@ -66,9 +66,34 @@ export default function RootLayout({
   const beaconToken = process.env.NEXT_PUBLIC_CF_BEACON_TOKEN;
   const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
   const gaEnabled = process.env.NODE_ENV === 'production' && !!gaId && process.env.NEXT_PUBLIC_ENABLE_GA !== 'false';
+  const gtmId = process.env.NEXT_PUBLIC_GTM_ID;
+  const gtmEnabled = process.env.NODE_ENV === 'production' && !!gtmId && process.env.NEXT_PUBLIC_ENABLE_GTM !== 'false';
   return (
     <html lang="ko" suppressHydrationWarning className={`${pretendard.variable} antialiased`}>
+      {/* Google Tag Manager */}
+      {gtmEnabled && (
+        <Script id="gtm-init" strategy="afterInteractive">
+          {`
+            (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            })(window,document,'script','dataLayer','${gtmId}');
+          `}
+        </Script>
+      )}
       <body className="h-full overflow-hidden">
+        {/* Google Tag Manager (noscript) */}
+        {gtmEnabled && (
+          <noscript>
+            <iframe
+              src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
+              height="0"
+              width="0"
+              style={{ display: 'none', visibility: 'hidden' }}
+            />
+          </noscript>
+        )}
         <Providers>
           {children}
           <Analytics />
